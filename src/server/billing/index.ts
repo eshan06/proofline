@@ -105,10 +105,13 @@ class StripeBillingProvider implements BillingProvider {
     } else if ((event.type === "customer.subscription.updated" || event.type === "customer.subscription.created") && workspaceId) {
       const priceId = ((((obj.items as Record<string, unknown>)?.data as unknown[])?.[0] as Record<string, unknown>)?.price as Record<string, unknown>)?.id as string | undefined;
       const plan = planForPrice(priceId) ?? (meta.plan as PlanName) ?? "Growth";
+      const periodEnd = typeof obj.current_period_end === "number" ? new Date(obj.current_period_end * 1000).toISOString() : undefined;
       await repo().setSubscription(workspaceId, {
         plan,
-        status: (obj.status as "active" | "past_due") ?? "active",
+        // Keep the full status union — don't coerce trialing/canceled to active.
+        status: (obj.status as "active" | "trialing" | "past_due" | "canceled") ?? "active",
         seats: planSeatLimit(plan),
+        ...(periodEnd ? { currentPeriodEnd: periodEnd } : {}),
       });
     } else if (event.type === "customer.subscription.deleted" && workspaceId) {
       // Cancellation drops paid entitlements back to Free.
