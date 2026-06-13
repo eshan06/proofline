@@ -70,7 +70,7 @@ export function Pricing() {
               <div className="flex flex-1 flex-col gap-2">
                 {p.feats.map((f) => (
                   <div key={f} className="flex items-start gap-2 text-[12.5px] leading-[1.45] text-ink-3">
-                    <Check size={12} strokeWidth={2} className="mt-0.5 shrink-0 text-accent" />
+                    <Check size={12} strokeWidth={1.5} className="mt-0.5 shrink-0 text-accent" />
                     <span>{f}</span>
                   </div>
                 ))}

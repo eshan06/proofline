@@ -40,7 +40,7 @@ export function DemoChecklist({ demo }: { demo: DemoState }) {
           className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-accent/32 bg-raised px-3.5 py-[7px] hover:border-accent/55"
           style={{ boxShadow: "0 10px 30px rgba(0,0,0,0.5)" }}
         >
-          <Sparkles size={15} className="text-accent" />
+          <Sparkles size={15} strokeWidth={1.4} className="text-accent" />
           <span className="text-[12px] font-medium text-ink-2">Demo guide</span>
           <span className="font-mono text-[10px] text-accent-soft">{count}/5</span>
         </button>
@@ -59,7 +59,7 @@ export function DemoChecklist({ demo }: { demo: DemoState }) {
           onClick={toggleDemoPanel}
           className="flex w-full cursor-pointer items-center gap-2 border-0 bg-transparent px-3.5 py-[11px] text-left hover:bg-white/[0.025]"
         >
-          <Sparkles size={15} className="text-accent" />
+          <Sparkles size={15} strokeWidth={1.4} className="text-accent" />
           <span className="text-[12.5px] font-semibold text-ink">Try it yourself</span>
           <span className="ml-auto font-mono text-[10px] text-accent-soft">{count}/5</span>
           <span className="text-[9px] text-muted">▾</span>

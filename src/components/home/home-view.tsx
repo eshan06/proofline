@@ -162,7 +162,7 @@ export function HomeView() {
               style={{ background: "linear-gradient(160deg, rgba(77,124,254,0.1), rgba(77,124,254,0.02)), #0F141E" }}
             >
               <div className="flex items-center gap-2">
-                <Sparkles size={15} className="text-accent" />
+                <Sparkles size={15} strokeWidth={1.4} className="text-accent" />
                 <span className="text-[12.5px] font-semibold text-ink">AI performance</span>
                 <span className="ml-auto font-mono text-[10px] text-muted">7 days</span>
               </div>

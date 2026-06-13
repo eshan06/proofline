@@ -90,7 +90,7 @@ export function Conversation({ ticket, isDemo }: { ticket: Ticket; isDemo: boole
             <span>{status.label}</span>
           </span>
         </div>
-        <div className="my-2.5 flex items-center gap-2">
+        <div className="mb-2.5 mt-[9px] flex items-center gap-2">
           <span className="flex items-center gap-1.5 rounded-full border border-white/7 bg-white/4 py-[2.5px] pl-1 pr-[9px] text-[11.5px] text-ink-4">
             <AgentAvatar name={ticket.assignee} size={17} />
             <span>{ticket.assignee ?? "Unassigned"}</span>

@@ -16,7 +16,7 @@ import type { Ticket } from "@/lib/schemas";
 function PanelHeader() {
   return (
     <div className="flex shrink-0 items-center gap-2 border-b border-white/7 px-4 py-[13px]">
-      <Sparkles size={15} className="text-accent" />
+      <Sparkles size={15} strokeWidth={1.4} className="text-accent" />
       <span className="text-[12.5px] font-semibold text-ink">AI Copilot</span>
       <span className="flex-1" />
       <span className="rounded-[5px] border border-white/8 px-[7px] py-0.5 font-mono text-[10px] text-muted">
@@ -218,7 +218,7 @@ export function CopilotPanel({ ticket, isDemo }: { ticket: Ticket; isDemo: boole
                   className="flex flex-1 items-center justify-center gap-1.5 rounded-[7px] border-0 bg-accent px-0 py-[7.5px] text-[12px] font-semibold text-white hover:bg-accent-hover"
                   style={{ boxShadow: "0 2px 12px rgba(77,124,254,0.3)" }}
                 >
-                  <Check size={13} strokeWidth={2} />
+                  <Check size={13} strokeWidth={1.4} />
                   <span>Accept draft</span>
                 </button>
                 <button

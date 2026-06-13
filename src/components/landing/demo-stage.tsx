@@ -101,7 +101,7 @@ export function DemoStage() {
           {/* s2: searching */}
           {step === 1 ? (
             <div className="ml-[35px] flex items-center gap-[9px]" style={{ animation: "dsTick 0.4s ease both" }}>
-              <Sparkles size={14} className="text-accent" />
+              <Sparkles size={14} strokeWidth={1.4} className="text-accent" />
               <span className="text-[11.5px] text-accent-soft">Searching 7 knowledge sources</span>
               <span className="flex gap-[3px]">
                 {[0, 0.15, 0.3].map((d) => (
@@ -115,7 +115,7 @@ export function DemoStage() {
           {step >= 2 ? (
             <div className="ml-[35px] max-w-[470px] overflow-hidden rounded-[11px] border border-accent/30 bg-accent/[0.06]" style={{ animation: "dsTick 0.45s ease both" }}>
               <div className="flex items-center gap-[7px] border-b border-accent/15 px-3 py-2">
-                <Sparkles size={14} className="text-accent" />
+                <Sparkles size={14} strokeWidth={1.4} className="text-accent" />
                 <span className="text-[11px] font-semibold text-accent-soft">AI draft — awaiting your approval</span>
                 <span className="ml-auto font-mono text-[10px] text-success">0.92 conf</span>
               </div>
@@ -130,7 +130,7 @@ export function DemoStage() {
           {/* s4: approved */}
           {step === 3 ? (
             <div className="ml-[35px] flex items-center gap-2" style={{ animation: "dsTick 0.4s ease both" }}>
-              <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-success/15 text-success"><Check size={12} strokeWidth={2.2} /></span>
+              <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-success/15 text-success"><Check size={12} strokeWidth={1.5} /></span>
               <span className="text-[11.5px] font-medium text-success">Approved by Eshan · sent in 38 seconds</span>
             </div>
           ) : null}
@@ -139,7 +139,7 @@ export function DemoStage() {
         {/* evidence side */}
         <div className="flex flex-col gap-3 px-5 py-5" style={{ background: "linear-gradient(180deg, rgba(77,124,254,0.045), rgba(0,0,0,0) 130px)" }}>
           <div className="flex items-center gap-2">
-            <Sparkles size={14} className="text-accent" />
+            <Sparkles size={14} strokeWidth={1.4} className="text-accent" />
             <span className="text-[12px] font-semibold text-ink">Evidence</span>
             <span className="ml-auto font-mono text-[9.5px] text-muted">proofline-r1</span>
           </div>
@@ -158,7 +158,7 @@ export function DemoStage() {
               <EvidenceItem n={2} title="Stripe sync runbook" sim="0.88 sim" quote="Manual resync is safe and idempotent…" delay={0.3} />
               <div className="mt-auto flex gap-[7px]" style={{ animation: "dsTick 0.4s 0.45s ease both" }}>
                 <span className="flex flex-1 items-center justify-center gap-1.5 rounded-[7px] py-2 text-[11.5px] font-semibold text-white" style={{ background: step === 3 ? "#2BA56A" : "#4D7CFE", boxShadow: "0 2px 14px rgba(77,124,254,0.3)", transition: "background 0.3s" }}>
-                  <Check size={12} strokeWidth={2.2} />{step === 3 ? "Approved ✓" : "Approve & send"}
+                  <Check size={12} strokeWidth={1.5} />{step === 3 ? "Approved ✓" : "Approve & send"}
                 </span>
                 <span className="flex items-center rounded-[7px] border border-white/10 bg-white/5 px-[13px] py-2 text-[11.5px] text-ink-2">Edit</span>
                 <span className="flex items-center rounded-[7px] border border-white/10 bg-white/5 px-[11px] py-2 text-[12px] text-ink-2">↻</span>

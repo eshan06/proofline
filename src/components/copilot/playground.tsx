@@ -42,7 +42,7 @@ export function Playground({ threshold }: { threshold: number }) {
       style={{ background: "linear-gradient(170deg, rgba(77,124,254,0.07), rgba(77,124,254,0.012)), #0F141E" }}
     >
       <div className="flex items-center gap-2">
-        <Sparkles size={15} className="text-accent" />
+        <Sparkles size={15} strokeWidth={1.4} className="text-accent" />
         <span className="text-[13px] font-semibold text-ink">Test playground</span>
         <span className="ml-auto font-mono text-[9.5px] text-muted">proofline-r1</span>
       </div>

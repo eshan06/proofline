@@ -27,11 +27,11 @@ export function Marquee() {
         }}
       >
         <div className="group flex w-max">
-          <div className="flex w-max" style={{ animation: "plMarquee 30s linear infinite" }}>
+          <div className="flex w-max group-hover:[animation-play-state:paused]" style={{ animation: "plMarquee 30s linear infinite" }}>
             {doubled.map((ig, i) => (
               <div
                 key={i}
-                className="mr-3 flex shrink-0 items-center gap-[9px] rounded-full border border-white/7 bg-white/[0.025] py-[7px] pl-2 pr-4 hover:border-accent/40"
+                className="mr-3 flex shrink-0 items-center gap-[9px] rounded-full border border-white/7 bg-white/[0.025] py-[7px] pl-2 pr-4 hover:border-accent/40 hover:bg-accent/5"
               >
                 <span className="flex h-6 w-6 items-center justify-center rounded-full border border-white/8 bg-white/5 font-mono text-[10px] font-semibold" style={{ color: ig.fg }}>{ig.glyph}</span>
                 <span className="whitespace-nowrap text-[12.5px] font-medium text-ink-4">{ig.name}</span>

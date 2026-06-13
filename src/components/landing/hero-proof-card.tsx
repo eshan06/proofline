@@ -34,7 +34,7 @@ export function HeroProofCard() {
       >
         {/* header */}
         <div className="flex items-center gap-2 border-b border-white/6 px-[15px] py-[11px]">
-          <Sparkles size={14} className="text-accent" />
+          <Sparkles size={14} strokeWidth={1.4} className="text-accent" />
           <span className="text-[11.5px] font-semibold text-ink-2">Proofline draft</span>
           <span className="font-mono text-[10px] text-faint">· TKT-1031</span>
           <span className="ml-auto flex items-center gap-1.5 font-mono text-[10.5px] text-success">
@@ -67,7 +67,7 @@ export function HeroProofCard() {
                 onMouseEnter={() => setHover(1)}
                 onMouseLeave={() => setHover(0)}
                 className="relative cursor-pointer rounded-[2px] px-px"
-                style={{ background: hover === 1 || sel === 1 ? MARK_HOVER : MARK }}
+                style={{ background: hover === 1 ? MARK_HOVER : MARK }}
               >
                 duplicates #INV-2231
                 <sup className="align-super font-mono text-[0.66em] font-semibold text-accent-soft-2">1</sup>
@@ -78,7 +78,7 @@ export function HeroProofCard() {
                 onMouseEnter={() => setHover(2)}
                 onMouseLeave={() => setHover(0)}
                 className="relative cursor-pointer rounded-[2px] px-px"
-                style={{ background: hover === 2 || sel === 2 ? MARK_HOVER : MARK }}
+                style={{ background: hover === 2 ? MARK_HOVER : MARK }}
               >
                 full refund to your original card
                 <sup className="align-super font-mono text-[0.66em] font-semibold text-accent-soft-2">2</sup>
@@ -97,12 +97,12 @@ export function HeroProofCard() {
           {/* actions / sent */}
           {sent ? (
             <div className="flex items-center justify-center gap-1.5 rounded-[7px] border border-success/35 bg-success/12 py-2 text-[11.5px] font-semibold text-success" style={{ animation: "plUp 0.3s ease both" }}>
-              <Check size={13} strokeWidth={2} />Sent to Priya Raman · just now
+              <Check size={13} strokeWidth={1.5} />Sent to Priya Raman · just now
             </div>
           ) : (
             <div className="flex gap-[7px]">
               <button type="button" onClick={() => { setSent(true); setEditing(false); }} className="flex flex-1 items-center justify-center gap-1.5 rounded-[7px] border-0 bg-accent py-2 text-[11.5px] font-semibold text-white hover:bg-accent-hover">
-                <Check size={13} strokeWidth={2} />Approve &amp; send
+                <Check size={13} strokeWidth={1.5} />Approve &amp; send
               </button>
               <button type="button" onClick={() => setEditing((e) => !e)} className="flex items-center rounded-[7px] border border-white/10 bg-white/5 px-3.5 py-2 text-[11.5px] text-ink-2 hover:border-accent/50 hover:text-accent-soft">
                 {editing ? "Done" : "Edit"}
@@ -115,7 +115,7 @@ export function HeroProofCard() {
       {/* floating receipt pill */}
       {sent ? (
         <div className="absolute flex items-center gap-1.5 rounded-full border border-success/35 bg-toast px-3 py-[5px]" style={{ bottom: -16, left: 22, boxShadow: "0 10px 30px rgba(0,0,0,0.5)", animation: "plUp 0.3s ease both" }}>
-          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-success/16 text-success"><Check size={11} strokeWidth={2.4} /></span>
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-success/16 text-success"><Check size={11} strokeWidth={1.5} /></span>
           <span className="text-[11px] text-ink-2">Approved by <span className="font-semibold text-ink">you</span> · sent just now</span>
         </div>
       ) : (
