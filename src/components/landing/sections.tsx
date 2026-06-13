@@ -19,9 +19,9 @@ export function HowItWorks() {
           <span className="font-mono text-[11px] tracking-[0.12em] text-accent">HOW IT WORKS</span>
           <h2 className="mt-2.5 text-[30px] font-bold tracking-[-0.03em] text-ink">Four steps to a faster queue</h2>
         </Reveal>
-        <div className="relative grid grid-cols-4">
-          <div className="absolute left-[12.5%] right-[12.5%] top-[19px] h-px" style={{ background: "linear-gradient(90deg, rgba(77,124,254,0), rgba(77,124,254,0.4), rgba(77,124,254,0.4), rgba(77,124,254,0))" }} />
-          <div className="absolute top-[16.5px] h-1.5 w-1.5 rounded-full" style={{ background: "#7DA2FF", boxShadow: "0 0 12px rgba(77,124,254,0.9)", animation: "plTravelX 9s ease-in-out infinite" }} />
+        <div className="relative grid grid-cols-2 gap-y-8 md:grid-cols-4 md:gap-y-0">
+          <div className="absolute left-[12.5%] right-[12.5%] top-[19px] hidden h-px md:block" style={{ background: "linear-gradient(90deg, rgba(77,124,254,0), rgba(77,124,254,0.4), rgba(77,124,254,0.4), rgba(77,124,254,0))" }} />
+          <div className="absolute top-[16.5px] hidden h-1.5 w-1.5 rounded-full md:block" style={{ background: "#7DA2FF", boxShadow: "0 0 12px rgba(77,124,254,0.9)", animation: "plTravelX 9s ease-in-out infinite" }} />
           {STEPS.map((s, i) => (
             <Reveal key={s.n} delay={i * 80} className="relative flex flex-col items-center gap-3 px-4 text-center">
               <div className="flex h-[38px] w-[38px] items-center justify-center rounded-full border border-accent/40 bg-panel font-mono text-[13px] font-semibold text-accent-soft-2" style={{ boxShadow: "0 0 20px rgba(77,124,254,0.15)" }}>{s.n}</div>
@@ -43,12 +43,12 @@ const PLANS = [
 
 export function Pricing() {
   return (
-    <div className="mx-auto max-w-[1080px] px-7 py-20">
+    <div id="pricing" className="mx-auto max-w-[1080px] px-7 py-20" style={{ scrollMarginTop: 70 }}>
       <Reveal className="mb-10 text-center">
         <span className="font-mono text-[11px] tracking-[0.12em] text-accent">PRICING</span>
         <h2 className="mt-2.5 text-[30px] font-bold tracking-[-0.03em] text-ink">Start free. Scale when the queue does.</h2>
       </Reveal>
-      <div className="grid grid-cols-3 items-stretch gap-3.5">
+      <div className="grid grid-cols-1 items-stretch gap-3.5 sm:grid-cols-3">
         {PLANS.map((p, i) => (
           <Reveal key={p.name} delay={i * 100}>
             <div
@@ -129,10 +129,10 @@ export function CtaFooter() {
         </div>
         <span>Proofline © 2026</span>
         <span className="ml-auto flex gap-[18px]">
-          <span className="cursor-pointer hover:text-ink-4">Privacy</span>
-          <span className="cursor-pointer hover:text-ink-4">Terms</span>
-          <span className="cursor-pointer hover:text-ink-4">Security</span>
-          <span className="cursor-pointer hover:text-ink-4">Status</span>
+          <Link href="/privacy" className="no-underline hover:text-ink-4">Privacy</Link>
+          <Link href="/terms" className="no-underline hover:text-ink-4">Terms</Link>
+          <Link href="/security" className="no-underline hover:text-ink-4">Security</Link>
+          <Link href="/status" className="no-underline hover:text-ink-4">Status</Link>
         </span>
       </div>
     </div>

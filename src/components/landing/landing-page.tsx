@@ -24,7 +24,7 @@ export function LandingPage() {
 
       <Marquee />
 
-      <div className="mx-auto max-w-[1080px] px-7 pb-20">
+      <div id="features" className="mx-auto max-w-[1080px] px-7 pb-20" style={{ scrollMarginTop: 70 }}>
         <Reveal className="mb-9 flex max-w-[520px] flex-col gap-3">
           <span className="font-mono text-[11px] tracking-[0.12em] text-accent">EVERYTHING IN ONE PLACE</span>
           <h2 className="text-[34px] font-bold leading-[1.15] tracking-[-0.03em] text-ink">Built for teams who refuse to send a guess.</h2>
@@ -47,11 +47,11 @@ function Nav() {
           <Logo size={24} />
           <span className="text-[15px] font-semibold tracking-[-0.02em] text-ink">Proofline</span>
         </div>
-        <div className="flex gap-5 text-[13px] text-ink-4">
-          <span className="cursor-pointer hover:text-ink">Product</span>
-          <span className="cursor-pointer hover:text-ink">Pricing</span>
-          <span className="cursor-pointer hover:text-ink">Docs</span>
-          <span className="cursor-pointer hover:text-ink">Changelog</span>
+        <div className="hidden gap-5 text-[13px] text-ink-4 sm:flex">
+          <a href="#features" className="no-underline hover:text-ink">Product</a>
+          <a href="#pricing" className="no-underline hover:text-ink">Pricing</a>
+          <Link href="/docs" className="no-underline hover:text-ink">Docs</Link>
+          <Link href="/changelog" className="no-underline hover:text-ink">Changelog</Link>
         </div>
         <span className="flex-1" />
         <Link href="/signin" className="text-[13px] text-ink-4 no-underline hover:text-ink">Sign in</Link>
@@ -76,10 +76,10 @@ function Hero() {
           WebkitMaskImage: "radial-gradient(ellipse 90% 70% at 50% 35%, #000 30%, transparent 75%)",
         }}
       />
-      <div className="relative mx-auto grid max-w-[1140px] grid-cols-[1.04fr_0.96fr] items-center gap-[54px]">
+      <div className="relative mx-auto grid max-w-[1140px] grid-cols-1 items-center gap-[40px] lg:grid-cols-[1.04fr_0.96fr] lg:gap-[54px]">
         {/* left */}
         <div className="flex flex-col items-start gap-6">
-          <h1 className="m-0 text-[53px] font-bold leading-[1.04] tracking-[-0.035em] text-ink" style={{ textWrap: "balance", animation: "plUp 0.6s 0.07s ease both" }}>
+          <h1 className="m-0 text-[clamp(34px,7vw,53px)] font-bold leading-[1.04] tracking-[-0.035em] text-ink" style={{ textWrap: "balance", animation: "plUp 0.6s 0.07s ease both" }}>
             Support that<br />
             <span className="relative whitespace-nowrap px-0.5" style={{ background: "linear-gradient(transparent 60%, rgba(77,124,254,0.32) 60%, rgba(77,124,254,0.32) 92%, transparent 92%)" }}>shows its work</span>.
           </h1>

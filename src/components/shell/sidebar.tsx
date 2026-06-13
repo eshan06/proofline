@@ -1,15 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { ExternalLink } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { ExternalLink, LogOut } from "lucide-react";
 import { Logo } from "./logo";
 import { NAV_ITEMS } from "./nav-items";
 import { toast } from "@/stores/toasts";
+import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const logout = async () => {
+    try {
+      await api.logOut();
+    } catch {
+      /* sign out locally regardless */
+    }
+    router.push("/signin");
+  };
 
   return (
     <div className="flex w-[220px] shrink-0 flex-col border-r border-white/7 bg-panel">
@@ -77,9 +88,18 @@ export function Sidebar() {
           </span>
           <span
             aria-label="Online"
-            className="ml-auto h-[7px] w-[7px] shrink-0 rounded-full bg-success"
+            className="h-[7px] w-[7px] shrink-0 rounded-full bg-success"
             style={{ boxShadow: "0 0 6px rgba(61,214,140,0.6)" }}
           />
+          <button
+            type="button"
+            onClick={logout}
+            aria-label="Sign out"
+            title="Sign out"
+            className="ml-auto flex h-[22px] w-[22px] items-center justify-center rounded-[6px] border-0 bg-transparent text-muted hover:bg-white/6 hover:text-ink"
+          >
+            <LogOut size={13} strokeWidth={1.4} />
+          </button>
         </div>
       </div>
     </div>
