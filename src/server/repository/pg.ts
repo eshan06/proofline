@@ -21,7 +21,8 @@ import type {
 import { uid, secureToken } from "@/lib/utils";
 import { seedWorkspaceData } from "./seed-data";
 import { buildWebTicket, newTicketRawId, ticketToTranscript, type WidgetTranscriptMessage } from "./web-ticket";
-import { NotFoundError, type Repository, type SessionInfo, type UserRecord } from "./types";
+import { planSeatLimit } from "@/server/billing/plans";
+import { NotFoundError, type Repository, type SessionInfo, type SubscriptionState, type UserRecord } from "./types";
 
 const DEMO_TTL_MS = 30 * 60 * 1000;
 const REGULAR_TTL_MS = 12 * 60 * 60 * 1000;
@@ -261,6 +262,38 @@ export class PgRepository implements Repository {
     await this.db.delete(s.users).where(eq(s.users.id, userId));
   }
 
+  async getSubscription(workspaceId: string): Promise<SubscriptionState> {
+    const [row] = await this.db.select().from(s.workspaces).where(eq(s.workspaces.id, workspaceId)).limit(1);
+    if (!row) throw new NotFoundError(`Unknown workspace ${workspaceId}`);
+    return {
+      plan: row.plan,
+      status: row.subscriptionStatus as SubscriptionState["status"],
+      seats: row.seats,
+      currentPeriodEnd: row.currentPeriodEnd,
+      stripeCustomerId: row.stripeCustomerId,
+      stripeSubscriptionId: row.stripeSubscriptionId,
+    };
+  }
+
+  async setSubscription(workspaceId: string, patch: Partial<SubscriptionState>): Promise<void> {
+    await this.db
+      .update(s.workspaces)
+      .set({
+        ...(patch.plan !== undefined && { plan: patch.plan }),
+        ...(patch.status !== undefined && { subscriptionStatus: patch.status }),
+        ...(patch.seats !== undefined && { seats: patch.seats }),
+        ...(patch.currentPeriodEnd !== undefined && { currentPeriodEnd: patch.currentPeriodEnd }),
+        ...(patch.stripeCustomerId !== undefined && { stripeCustomerId: patch.stripeCustomerId }),
+        ...(patch.stripeSubscriptionId !== undefined && { stripeSubscriptionId: patch.stripeSubscriptionId }),
+      })
+      .where(eq(s.workspaces.id, workspaceId));
+  }
+
+  async countMembers(workspaceId: string): Promise<number> {
+    const rows = await this.db.select({ userId: s.memberships.userId }).from(s.memberships).where(eq(s.memberships.workspaceId, workspaceId));
+    return rows.length;
+  }
+
   async membershipRole(userId: string, workspaceId: string): Promise<MemberRole | null> {
     const [row] = await this.db
       .select()
@@ -346,6 +379,14 @@ export class PgRepository implements Repository {
         siteKey: wsRow.widgetSiteKey ?? "",
         enabled: wsRow.widgetEnabled,
         allowedOrigins: wsRow.widgetAllowedOrigins,
+      },
+      subscription: {
+        plan: wsRow.plan,
+        status: wsRow.subscriptionStatus as "active" | "trialing" | "past_due" | "canceled",
+        seats: wsRow.seats,
+        seatLimit: planSeatLimit(wsRow.plan),
+        seatsUsed: memberRows.length,
+        currentPeriodEnd: wsRow.currentPeriodEnd,
       },
     };
   }

@@ -13,7 +13,6 @@ export async function POST(req: Request) {
     const { url } = await billing().createCheckoutSession({
       workspaceId: session.workspaceId,
       plan: body.plan ?? "scale",
-      seats: 3,
       successUrl: `${APP_URL}/settings/billing`,
       cancelUrl: `${APP_URL}/settings/billing`,
     });

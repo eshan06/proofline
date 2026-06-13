@@ -8,7 +8,7 @@ import { useEscToClose } from "@/hooks/use-esc";
 import { api } from "@/lib/api-client";
 import { toast } from "@/stores/toasts";
 import { agents } from "@/data/workspace";
-import type { AuditEvent, Member, MemberRole } from "@/lib/schemas";
+import type { AuditEvent, Member, MemberRole, Subscription } from "@/lib/schemas";
 
 const TABS = [
   ["team", "Team"],
@@ -79,7 +79,7 @@ export function SettingsView({ tab }: { tab: Tab }) {
 
         {tab === "team" ? <TeamTab members={members} onInvite={() => setInviteOpen(true)} /> : null}
         {tab === "workspace" ? <WorkspaceTab initialName={ws?.name ?? "Acme Inc"} /> : null}
-        {tab === "billing" ? <BillingTab /> : null}
+        {tab === "billing" ? <BillingTab subscription={ws?.subscription} /> : null}
         {tab === "audit" ? <AuditTab audit={audit} filter={auditFilter} setFilter={setAuditFilter} /> : null}
       </div>
 
@@ -198,29 +198,37 @@ function WorkspaceTab({ initialName }: { initialName: string }) {
   );
 }
 
-function BillingTab() {
+function BillingTab({ subscription }: { subscription?: Subscription }) {
+  const plan = subscription?.plan ?? "Growth";
+  const used = subscription?.seatsUsed ?? 0;
+  const limit = subscription?.seatLimit ?? 0;
+  const status = subscription?.status ?? "active";
+  const isScale = plan === "Scale";
   return (
     <div className="mt-[18px] flex flex-col gap-3.5" style={{ animation: "plFade 0.2s ease" }}>
       <div className="flex items-center gap-3.5 rounded-[11px] border border-accent/30 px-[18px] py-4" style={{ background: "linear-gradient(170deg, rgba(77,124,254,0.08), rgba(77,124,254,0.015)), #0F141E" }}>
         <div className="flex flex-1 flex-col gap-[3px]">
-          <span className="text-[14px] font-semibold text-ink">Growth plan</span>
-          <span className="text-[11.5px] text-ink-4">$49 per seat / month · 3 seats · renews Jul 1, 2026</span>
+          <span className="text-[14px] font-semibold text-ink">{plan} plan{status !== "active" ? ` · ${status}` : ""}</span>
+          <span className="text-[11.5px] text-ink-4">{used} of {limit} seats used{subscription?.currentPeriodEnd ? ` · renews ${subscription.currentPeriodEnd}` : ""}</span>
         </div>
-        <span className="font-mono text-[19px] font-semibold text-ink">$147<span className="text-[11px] text-muted">/mo</span></span>
-        <button
-          type="button"
-          onClick={async () => {
-            try {
-              const { url } = await api.checkout("scale");
-              window.location.href = url;
-            } catch {
-              toast("Could not start checkout — try again");
-            }
-          }}
-          className="rounded-[7px] border border-white/10 bg-white/5 px-[13px] py-1.5 text-[11.5px] font-medium text-ink-2 hover:border-accent/50 hover:text-accent-soft"
-        >
-          Upgrade to Scale
-        </button>
+        {!isScale ? (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const { url } = await api.checkout("scale");
+                window.location.href = url;
+              } catch {
+                toast("Could not start checkout — try again");
+              }
+            }}
+            className="rounded-[7px] border border-white/10 bg-white/5 px-[13px] py-1.5 text-[11.5px] font-medium text-ink-2 hover:border-accent/50 hover:text-accent-soft"
+          >
+            Upgrade to Scale
+          </button>
+        ) : (
+          <span className="rounded-full bg-success/[0.1] px-[10px] py-1 text-[11px] text-success">Top tier</span>
+        )}
       </div>
       <div className="grid grid-cols-4 gap-3">
         {USAGE.map((u) => (

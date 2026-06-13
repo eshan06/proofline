@@ -18,10 +18,12 @@ import type {
 import { uid, secureToken } from "@/lib/utils";
 import { seedWorkspaceData, type WorkspaceData } from "./seed-data";
 import { buildWebTicket, newTicketRawId, ticketToTranscript, type WidgetTranscriptMessage } from "./web-ticket";
+import { planSeatLimit } from "@/server/billing/plans";
 import {
   NotFoundError,
   type Repository,
   type SessionInfo,
+  type SubscriptionState,
   type UserRecord,
 } from "./types";
 
@@ -254,6 +256,17 @@ export class MemoryRepository implements Repository {
     for (const [tok, t] of this.authTokens) if (t.userId === userId) this.authTokens.delete(tok);
   }
 
+  async getSubscription(workspaceId: string): Promise<SubscriptionState> {
+    return { ...this.ws(workspaceId).subscription };
+  }
+  async setSubscription(workspaceId: string, patch: Partial<SubscriptionState>): Promise<void> {
+    const d = this.ws(workspaceId);
+    d.subscription = { ...d.subscription, ...patch };
+  }
+  async countMembers(workspaceId: string): Promise<number> {
+    return this.ws(workspaceId).members.length;
+  }
+
   async membershipRole(userId: string, workspaceId: string): Promise<MemberRole | null> {
     return this.memberships.find((m) => m.userId === userId && m.workspaceId === workspaceId)?.role ?? null;
   }
@@ -286,6 +299,14 @@ export class MemoryRepository implements Repository {
       demo: { active: false, steps: { draft: false, send: false, upload: false, connect: false, palette: false } },
       currentUser: null,
       widget: d.widget,
+      subscription: {
+        plan: d.subscription.plan,
+        status: d.subscription.status,
+        seats: d.subscription.seats,
+        seatLimit: planSeatLimit(d.subscription.plan),
+        seatsUsed: d.members.length,
+        currentPeriodEnd: d.subscription.currentPeriodEnd,
+      },
     };
   }
 

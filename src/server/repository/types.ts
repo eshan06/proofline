@@ -32,6 +32,15 @@ export interface UserRecord {
   emailVerified?: boolean;
 }
 
+export interface SubscriptionState {
+  plan: string;
+  status: "active" | "trialing" | "past_due" | "canceled";
+  seats: number;
+  currentPeriodEnd: string;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+}
+
 export class NotFoundError extends Error {
   constructor(message?: string) {
     super(message);
@@ -91,6 +100,12 @@ export interface Repository {
   deleteWorkspace(workspaceId: string): Promise<void>;
   /** Delete a user if they have no remaining workspace memberships. */
   deleteUserIfOrphaned(userId: string): Promise<void>;
+
+  /* billing / subscription */
+  getSubscription(workspaceId: string): Promise<SubscriptionState>;
+  setSubscription(workspaceId: string, patch: Partial<SubscriptionState>): Promise<void>;
+  /** Active + invited member count, for seat-limit enforcement. */
+  countMembers(workspaceId: string): Promise<number>;
   /** The user's primary (first) workspace id, or null if they have none. */
   primaryWorkspaceForUser(userId: string): Promise<string | null>;
   /** A fully-seeded throwaway workspace for an unauthenticated demo session. */

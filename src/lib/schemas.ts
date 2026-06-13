@@ -294,6 +294,17 @@ export const widgetConfigSchema = z.object({
 });
 export type WidgetConfig = z.infer<typeof widgetConfigSchema>;
 
+export const subscriptionStatusSchema = z.enum(["active", "trialing", "past_due", "canceled"]);
+export const subscriptionSchema = z.object({
+  plan: z.string(),
+  status: subscriptionStatusSchema,
+  seats: z.number(),
+  seatLimit: z.number(),
+  seatsUsed: z.number(),
+  currentPeriodEnd: z.string(),
+});
+export type Subscription = z.infer<typeof subscriptionSchema>;
+
 /* ------------------------------------------------------------------ */
 /*  Workspace payload (GET /api/workspace)                             */
 /* ------------------------------------------------------------------ */
@@ -313,6 +324,7 @@ export const workspaceSchema = z.object({
   /** The signed-in user, or null for demo / anonymous sessions. */
   currentUser: currentUserSchema.nullable(),
   widget: widgetConfigSchema,
+  subscription: subscriptionSchema,
 });
 export type Workspace = z.infer<typeof workspaceSchema>;
 

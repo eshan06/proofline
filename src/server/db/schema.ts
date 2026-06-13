@@ -33,6 +33,12 @@ export const workspaces = pgTable("workspaces", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   plan: text("plan").notNull().default("Growth"),
+  // Billing / subscription state (synced from the billing provider's webhook).
+  subscriptionStatus: text("subscription_status").notNull().default("active"), // active|trialing|past_due|canceled
+  seats: integer("seats").notNull().default(3),
+  currentPeriodEnd: text("current_period_end").notNull().default(""),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
   // Website chat widget: a public (non-secret) site key identifies the tenant
   // in the embed script; allowed origins gate cross-origin intake (CORS).
   widgetSiteKey: text("widget_site_key").unique(),
