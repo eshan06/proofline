@@ -85,6 +85,12 @@ export interface Repository {
   createEmailVerification(userId: string): Promise<string>;
   consumeEmailVerification(token: string): Promise<string | null>;
   markEmailVerified(userId: string): Promise<void>;
+
+  /* account deletion (GDPR / workspace teardown) */
+  /** Delete a workspace and all its data (cascade). */
+  deleteWorkspace(workspaceId: string): Promise<void>;
+  /** Delete a user if they have no remaining workspace memberships. */
+  deleteUserIfOrphaned(userId: string): Promise<void>;
   /** The user's primary (first) workspace id, or null if they have none. */
   primaryWorkspaceForUser(userId: string): Promise<string | null>;
   /** A fully-seeded throwaway workspace for an unauthenticated demo session. */

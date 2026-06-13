@@ -138,6 +138,21 @@ function TeamTab({ members, onInvite }: { members: Member[]; onInvite: () => voi
 
 function WorkspaceTab({ initialName }: { initialName: string }) {
   const [name, setName] = useState(initialName);
+  const [confirmDelete, setConfirmDelete] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  const doDelete = async () => {
+    if (confirmDelete !== "DELETE") return;
+    setDeleting(true);
+    try {
+      await api.deleteAccount();
+      window.location.href = "/signin";
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not delete workspace");
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="mt-[18px] flex max-w-[520px] flex-col gap-3.5" style={{ animation: "plFade 0.2s ease" }}>
       <div className="flex flex-col gap-3 rounded-[11px] border border-white/7 bg-card px-[18px] py-4">
@@ -146,18 +161,38 @@ function WorkspaceTab({ initialName }: { initialName: string }) {
           <span className="text-[11px] font-semibold text-ink-4">Name</span>
           <input value={name} onChange={(e) => setName(e.target.value)} className="pl-focus rounded-[7px] border border-white/9 bg-white/[0.035] px-3 py-2 text-[12.5px] text-ink" />
         </div>
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-semibold text-ink-4">Workspace URL</span>
-          <div className="rounded-[7px] border border-white/7 bg-black/25 px-3 py-2 font-mono text-[12px] text-muted">app.proofline.com/<span className="text-accent-soft">acme</span></div>
-        </div>
         <button type="button" onClick={() => toast("Workspace settings saved")} className="self-start rounded-[7px] border-0 bg-accent px-4 py-[7px] text-[12px] font-semibold text-white hover:bg-accent-hover">Save changes</button>
       </div>
-      <div className="flex items-center gap-3 rounded-[11px] border border-danger/25 bg-card px-[18px] py-4">
+
+      <div className="flex items-center gap-3 rounded-[11px] border border-white/7 bg-card px-[18px] py-4">
         <div className="flex flex-1 flex-col gap-0.5">
-          <span className="text-[12.5px] font-semibold text-danger-soft">Delete workspace</span>
-          <span className="text-[11.5px] text-ink-4">Permanently removes all tickets, docs, and members.</span>
+          <span className="text-[12.5px] font-semibold text-ink">Export your data</span>
+          <span className="text-[11.5px] text-ink-4">Download everything in this workspace as JSON.</span>
         </div>
-        <button type="button" onClick={() => toast("Workspace deletion requires owner confirmation")} className="rounded-[7px] border border-danger/40 bg-transparent px-[13px] py-1.5 text-[11.5px] font-medium text-danger hover:bg-danger/[0.08]">Delete…</button>
+        <a href="/api/account/export" className="rounded-[7px] border border-white/10 bg-white/4 px-[13px] py-1.5 text-[11.5px] font-medium text-ink-2 no-underline hover:border-accent/50 hover:text-accent-soft">Export ↓</a>
+      </div>
+
+      <div className="flex flex-col gap-2.5 rounded-[11px] border border-danger/25 bg-card px-[18px] py-4">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[12.5px] font-semibold text-danger-soft">Delete workspace</span>
+          <span className="text-[11.5px] text-ink-4">Permanently removes all tickets, docs, members, and your account. This cannot be undone — type <span className="font-mono text-ink-3">DELETE</span> to confirm.</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            value={confirmDelete}
+            onChange={(e) => setConfirmDelete(e.target.value)}
+            placeholder="DELETE"
+            className="pl-focus w-[120px] rounded-[7px] border border-white/9 bg-white/[0.035] px-3 py-1.5 font-mono text-[12px] text-ink"
+          />
+          <button
+            type="button"
+            disabled={confirmDelete !== "DELETE" || deleting}
+            onClick={doDelete}
+            className="rounded-[7px] border border-danger/40 bg-transparent px-[13px] py-1.5 text-[11.5px] font-medium text-danger hover:bg-danger/[0.08] disabled:opacity-40"
+          >
+            {deleting ? "Deleting…" : "Delete permanently"}
+          </button>
+        </div>
       </div>
     </div>
   );

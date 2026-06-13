@@ -96,6 +96,8 @@ export const api = {
   resetPassword: (body: { token: string; password: string }) =>
     request("/api/auth/reset", { method: "POST", body: JSON.stringify(body) }),
 
+  deleteAccount: () => request("/api/account/delete", { method: "POST" }),
+
   checkout: (plan: "growth" | "scale") =>
     request<{ url: string }>("/api/billing/checkout", { method: "POST", body: JSON.stringify({ plan }) }),
 };

@@ -236,6 +236,24 @@ export class MemoryRepository implements Repository {
     if (u) u.emailVerified = true;
   }
 
+  async deleteWorkspace(workspaceId: string): Promise<void> {
+    this.workspaces.delete(workspaceId);
+    // Splice in place so the shared global array reference stays valid.
+    for (let i = this.memberships.length - 1; i >= 0; i--) {
+      if (this.memberships[i]!.workspaceId === workspaceId) this.memberships.splice(i, 1);
+    }
+    // Mirror FK cascade: drop sessions + widget conversations for this workspace.
+    for (const [id, s] of this.sessions) if (s.workspaceId === workspaceId) this.sessions.delete(id);
+    for (const [t, c] of this.widgetConvos) if (c.workspaceId === workspaceId) this.widgetConvos.delete(t);
+  }
+
+  async deleteUserIfOrphaned(userId: string): Promise<void> {
+    if (this.memberships.some((m) => m.userId === userId)) return;
+    for (const [email, u] of this.users) if (u.id === userId) this.users.delete(email);
+    for (const [id, s] of this.sessions) if (s.userId === userId) this.sessions.delete(id);
+    for (const [tok, t] of this.authTokens) if (t.userId === userId) this.authTokens.delete(tok);
+  }
+
   async membershipRole(userId: string, workspaceId: string): Promise<MemberRole | null> {
     return this.memberships.find((m) => m.userId === userId && m.workspaceId === workspaceId)?.role ?? null;
   }

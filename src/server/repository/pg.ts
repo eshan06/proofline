@@ -247,6 +247,20 @@ export class PgRepository implements Repository {
     await this.db.update(s.users).set({ emailVerified: true }).where(eq(s.users.id, userId));
   }
 
+  async deleteWorkspace(workspaceId: string): Promise<void> {
+    // FK cascades remove tickets, customers, kb, automations, integrations,
+    // audit, notifications, copilot settings, memberships, sessions, and widget
+    // conversations for this workspace.
+    await this.db.delete(s.workspaces).where(eq(s.workspaces.id, workspaceId));
+  }
+
+  async deleteUserIfOrphaned(userId: string): Promise<void> {
+    const rows = await this.db.select().from(s.memberships).where(eq(s.memberships.userId, userId)).limit(1);
+    if (rows.length) return;
+    // Cascades the user's remaining sessions, password resets, verifications.
+    await this.db.delete(s.users).where(eq(s.users.id, userId));
+  }
+
   async membershipRole(userId: string, workspaceId: string): Promise<MemberRole | null> {
     const [row] = await this.db
       .select()
