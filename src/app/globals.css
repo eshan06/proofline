@@ -1,0 +1,333 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ */
+/*  Proofline design tokens — exact values from the design handoff.    */
+/*  Dark theme only.                                                   */
+/* ------------------------------------------------------------------ */
+
+@theme {
+  /* surfaces */
+  --color-page: #0a0d14; /* app page background */
+  --color-page-landing: #07090f; /* landing page background */
+  --color-panel: #0c0f17; /* sidebar, landing cards, panel chrome */
+  --color-card: #0f141e; /* app cards / tables */
+  --color-raised: #11151f; /* popovers, palette, modals */
+  --color-bubble: #131826; /* customer message bubbles */
+  --color-toast: #161b28; /* toasts, floating pills */
+
+  /* text */
+  --color-ink: #e6eaf2; /* headings, primary text */
+  --color-ink-2: #c6ccda;
+  --color-ink-3: #a9b2c4;
+  --color-ink-4: #8a93a6;
+  --color-muted: #5c6478; /* labels, meta */
+  --color-faint: #444b5c; /* timestamps, fine print */
+
+  /* accent + semantic */
+  --color-accent: #4d7cfe;
+  --color-accent-hover: #5e89ff;
+  --color-accent-soft: #9db7ff;
+  --color-accent-soft-2: #7da2ff;
+  --color-success: #3dd68c;
+  --color-warning: #f5b74e;
+  --color-warning-soft: #e8d5ac;
+  --color-danger: #f36c6c;
+  --color-danger-soft: #f8a0a0;
+  --color-violet: #8b5cf6;
+  --color-violet-soft: #c4b0f8;
+
+  /* type */
+  --font-sans: var(--font-geist-sans), "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), "Geist Mono", ui-monospace, monospace;
+
+  /* motion */
+  --ease-swift: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Base                                                               */
+/* ------------------------------------------------------------------ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.09);
+  border-radius: 6px;
+  border: 3px solid rgba(0, 0, 0, 0);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border: 3px solid rgba(0, 0, 0, 0);
+  background-clip: padding-box;
+}
+
+::selection {
+  background: rgba(77, 124, 254, 0.35);
+}
+
+input,
+textarea,
+button {
+  font-family: inherit;
+}
+input:focus,
+textarea:focus {
+  outline: none;
+}
+
+/* Focus ring per the design: accent border + 3px soft ring. */
+.pl-focus:focus {
+  border-color: rgba(77, 124, 254, 0.55) !important;
+  box-shadow: 0 0 0 3px rgba(77, 124, 254, 0.12);
+}
+
+/* Keyboard focus visibility for non-input interactive elements. */
+.pl-focus-visible:focus-visible {
+  outline: none;
+  border-color: rgba(77, 124, 254, 0.55) !important;
+  box-shadow: 0 0 0 3px rgba(77, 124, 254, 0.12);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Keyframes (shared)                                                 */
+/* ------------------------------------------------------------------ */
+
+@keyframes plFade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes plToast {
+  from {
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes plSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes plPulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes plShimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+/* landing-only ambient loops */
+@keyframes plMarquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes plUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes plGlow {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes plSweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes plRowLoop {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes plPopLoop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes plWave {
+  from {
+    transform: scaleY(0.18);
+    opacity: 0.4;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+@keyframes plSlaDrain {
+  0% {
+    width: 96%;
+    background: #3dd68c;
+  }
+  55% {
+    background: #f5b74e;
+  }
+  100% {
+    width: 30%;
+    background: #f5b74e;
+  }
+}
+@keyframes plWarnPop {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes plTravelX {
+  0% {
+    left: 13%;
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    left: 86%;
+    opacity: 0;
+  }
+}
+@keyframes plFloatChip {
+  0% {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+  14% {
+    opacity: 0.5;
+  }
+  76% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateY(-170px);
+    opacity: 0;
+  }
+}
+@keyframes plCardGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 22px rgba(77, 124, 254, 0.1);
+    border-color: rgba(77, 124, 254, 0.38);
+  }
+  50% {
+    box-shadow: 0 0 42px rgba(77, 124, 254, 0.2);
+    border-color: rgba(77, 124, 254, 0.55);
+  }
+}
+
+/* DemoStage */
+@keyframes dsGlow {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes dsDot {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+@keyframes dsTick {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes dsPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  60% {
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes dsBar {
+  from {
+    width: 0;
+  }
+}

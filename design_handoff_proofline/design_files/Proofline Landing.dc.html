@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; background: #07090F; }
+    * { box-sizing: border-box; }
+    ::selection { background: rgba(77,124,254,0.35); }
+    ::-webkit-scrollbar { width: 10px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.09); border-radius: 6px; }
+    @keyframes plMarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+    @keyframes plUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+    @keyframes plGlow { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+    @keyframes plSweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+    @keyframes plRowLoop { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+    @keyframes plPopLoop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+    @keyframes plWave { from { transform: scaleY(0.18); opacity: 0.4; } to { transform: scaleY(1); opacity: 1; } }
+    @keyframes plSlaDrain { 0% { width: 96%; background: #3DD68C; } 55% { background: #F5B74E; } 100% { width: 30%; background: #F5B74E; } }
+    @keyframes plWarnPop { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    @keyframes plTravelX { 0% { left: 13%; opacity: 0; } 8% { opacity: 1; } 92% { opacity: 1; } 100% { left: 86%; opacity: 0; } }
+    @keyframes plFloatChip { 0% { transform: translateY(40px); opacity: 0; } 14% { opacity: 0.5; } 76% { opacity: 0.5; } 100% { transform: translateY(-170px); opacity: 0; } }
+    @keyframes plCardGlow { 0%, 100% { box-shadow: 0 0 22px rgba(77,124,254,0.1); border-color: rgba(77,124,254,0.38); } 50% { box-shadow: 0 0 42px rgba(77,124,254,0.2); border-color: rgba(77,124,254,0.55); } }
+    @keyframes plSpinCw { to { transform: rotate(360deg); } }
+  </style>
+</helmet>
+
+<div data-screen-label="Landing page" style="background: #07090F; color: #E6EAF2; font-family: 'Geist', sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden;">
+
+  <!-- nav -->
+  <div style="position: sticky; top: 0; z-index: 50; backdrop-filter: blur(12px); background: rgba(7,9,15,0.72); border-bottom: 1px solid rgba(255,255,255,0.06);">
+    <div style="max-width: 1080px; margin: 0 auto; display: flex; align-items: center; gap: 26px; padding: 14px 28px;">
+      <div style="display: flex; align-items: center; gap: 9px;">
+        <div style="width: 24px; height: 24px; border-radius: 7px; background: linear-gradient(135deg, #4D7CFE, #3B5FD9); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 12px rgba(77,124,254,0.4);">{{ logoIcon }}</div>
+        <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.02em;">Proofline</span>
+      </div>
+      <div style="display: flex; gap: 20px; font-size: 13px; color: #8A93A6;">
+        <span style="cursor: pointer;" style-hover="color: #E6EAF2;">Product</span>
+        <span style="cursor: pointer;" style-hover="color: #E6EAF2;">Pricing</span>
+        <span style="cursor: pointer;" style-hover="color: #E6EAF2;">Docs</span>
+        <span style="cursor: pointer;" style-hover="color: #E6EAF2;">Changelog</span>
+      </div>
+      <span style="flex: 1;"></span>
+      <a href="Proofline App.dc.html" style="font-size: 13px; color: #8A93A6; text-decoration: none;" style-hover="color: #E6EAF2;">Sign in</a>
+      <a href="Proofline App.dc.html" style="font-size: 13px; font-weight: 600; color: #fff; text-decoration: none; background: #4D7CFE; border-radius: 7px; padding: 7px 14px; box-shadow: 0 2px 14px rgba(77,124,254,0.35);" style-hover="background: #5E89FF;">Start free</a>
+    </div>
+  </div>
+
+  <!-- hero -->
+  <div style="position: relative; overflow: hidden; padding: 74px 28px 56px;">
+    <div style="position: absolute; top: -160px; right: -60px; width: 680px; height: 520px; background: radial-gradient(ellipse at 65% 30%, rgba(77,124,254,0.15), rgba(77,124,254,0) 62%); pointer-events: none;"></div>
+    <div style="position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px); background-size: 56px 56px; mask-image: radial-gradient(ellipse 90% 70% at 50% 35%, #000 30%, transparent 75%); -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 35%, #000 30%, transparent 75%); pointer-events: none;"></div>
+
+    <div style="position: relative; max-width: 1140px; margin: 0 auto; display: grid; grid-template-columns: 1.04fr 0.96fr; gap: 54px; align-items: center;">
+
+      <!-- left: editorial column -->
+      <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 24px;">
+        <h1 style="margin: 0; font-size: 53px; font-weight: 700; letter-spacing: -0.035em; line-height: 1.04; text-wrap: balance; animation: plUp 0.6s 0.07s ease both;">Support that<br><span style="position: relative; white-space: nowrap; background: linear-gradient(transparent 60%, rgba(77,124,254,0.32) 60%, rgba(77,124,254,0.32) 92%, transparent 92%); padding: 0 2px;">shows its work</span>.</h1>
+
+        <p style="margin: 0; max-width: 430px; font-size: 16px; line-height: 1.62; color: #8A93A6; text-wrap: pretty; animation: plUp 0.6s 0.14s ease both;">One inbox for chat, email, and Slack. Every reply is drafted from your docs, cited, and approved by a human.</p>
+
+        <div style="display: flex; gap: 11px; animation: plUp 0.6s 0.21s ease both;">
+          <a href="Proofline App.dc.html" style="font-size: 14px; font-weight: 600; color: #fff; text-decoration: none; background: #4D7CFE; border-radius: 9px; padding: 11px 22px; box-shadow: 0 6px 22px rgba(77,124,254,0.38);" style-hover="background: #5E89FF; transform: translateY(-1px);">Start free</a>
+          <a href="Proofline App.dc.html?demo=1" style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: #C6CCDA; text-decoration: none; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 9px; padding: 11px 18px;" style-hover="background: rgba(255,255,255,0.08); border-color: rgba(77,124,254,0.4);">
+            <span>Try the demo yourself</span>
+            <span style="color: #5C6478;">→</span>
+          </a>
+        </div>
+
+        <div data-countup-root style="display: flex; align-items: center; gap: 16px; margin-top: 4px; animation: plUp 0.6s 0.27s ease both;">
+          <div style="display: flex; flex-direction: column; gap: 1px;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 17px; font-weight: 600; color: #E6EAF2; letter-spacing: -0.02em;">{{ numA }}<span style="font-size: 11px; color: #5C6478;">%</span></span>
+            <span style="font-size: 10.5px; color: #5C6478;">drafts accepted</span>
+          </div>
+          <span style="width: 1px; height: 26px; background: rgba(255,255,255,0.1);"></span>
+          <div style="display: flex; flex-direction: column; gap: 1px;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 17px; font-weight: 600; color: #E6EAF2; letter-spacing: -0.02em;">{{ numB }}m<span style="font-size: 11px; color: #5C6478;"> {{ numC }}s</span></span>
+            <span style="font-size: 10.5px; color: #5C6478;">median first response</span>
+          </div>
+          <span style="width: 1px; height: 26px; background: rgba(255,255,255,0.1);"></span>
+          <div style="display: flex; flex-direction: column; gap: 1px;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 17px; font-weight: 600; color: #E6EAF2; letter-spacing: -0.02em;">{{ numD }}<span style="font-size: 11px; color: #5C6478;">%</span></span>
+            <span style="font-size: 10.5px; color: #5C6478;">claims cited</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- right: annotated proof artifact -->
+      <div style="position: relative; animation: plUp 0.7s 0.18s ease both;">
+        <div style="position: absolute; inset: -1px; border-radius: 16px; background: linear-gradient(150deg, rgba(77,124,254,0.4), rgba(77,124,254,0) 45%); pointer-events: none;"></div>
+        <div style="position: relative; background: linear-gradient(180deg, rgba(19,24,38,0.96), rgba(12,15,23,0.96)); border: 1px solid rgba(255,255,255,0.09); border-radius: 15px; box-shadow: 0 30px 80px rgba(0,0,0,0.55); overflow: hidden;">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 11px 15px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+            <span style="display: flex; color: #4D7CFE;">{{ aiIcon }}</span>
+            <span style="font-size: 11.5px; font-weight: 600; color: #C6CCDA;">Proofline draft</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #444B5C;">· TKT-1031</span>
+            <span style="margin-left: auto; display: flex; align-items: center; gap: 6px; font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #3DD68C;"><span style="width: 5px; height: 5px; border-radius: 99px; background: #3DD68C;"></span>0.94 conf</span>
+          </div>
+
+          <div style="padding: 15px 16px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; gap: 9px;">
+              <div style="width: 24px; height: 24px; border-radius: 99px; background: hsl(30 45% 22%); color: hsl(30 78% 72%); display: flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 600; flex-shrink: 0;">PR</div>
+              <div style="background: #0C0F17; border: 1px solid rgba(255,255,255,0.06); border-radius: 3px 10px 10px 10px; padding: 8px 11px; font-size: 12px; line-height: 1.5; color: #A9B2C4;">I was charged twice for our March invoice — can you refund the duplicate?</div>
+            </div>
+
+            <sc-if value="{{ heroView }}" hint-placeholder-val="{{ true }}">
+              <div style="border: 1px solid rgba(77,124,254,0.22); background: rgba(77,124,254,0.05); border-radius: 10px; padding: 12px 13px; font-size: 12.5px; line-height: 1.7; color: #D6DCE8;">Confirmed — invoice #INV-2235 <span onClick="{{ sel1 }}" style="position: relative; cursor: pointer; background: linear-gradient(transparent 62%, rgba(77,124,254,0.28) 62%); padding: 0 1px; border-radius: 2px;" style-hover="background: linear-gradient(transparent 62%, rgba(77,124,254,0.5) 62%);">duplicates #INV-2231<sup style="font-family: 'Geist Mono', monospace; font-size: 0.66em; color: #7DA2FF; font-weight: 600; vertical-align: super;">1</sup></span>. I've issued a <span onClick="{{ sel2 }}" style="position: relative; cursor: pointer; background: linear-gradient(transparent 62%, rgba(77,124,254,0.28) 62%); padding: 0 1px; border-radius: 2px;" style-hover="background: linear-gradient(transparent 62%, rgba(77,124,254,0.5) 62%);">full refund to your original card<sup style="font-family: 'Geist Mono', monospace; font-size: 0.66em; color: #7DA2FF; font-weight: 600; vertical-align: super;">2</sup></span> — it'll appear within 5–10 business days.</div>
+            </sc-if>
+            <sc-if value="{{ heroEditing }}" hint-placeholder-val="{{ false }}">
+              <textarea value="{{ heroDraft }}" onChange="{{ onHeroDraft }}" style="width: 100%; min-height: 96px; background: rgba(0,0,0,0.3); border: 1px solid rgba(77,124,254,0.45); border-radius: 10px; padding: 11px 13px; color: #E6EAF2; font-size: 12.5px; line-height: 1.65; resize: none; box-shadow: 0 0 0 3px rgba(77,124,254,0.12);"></textarea>
+            </sc-if>
+
+            <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 11px; border-top: 1px dashed rgba(255,255,255,0.1);">
+              <span style="font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; color: #5C6478;">SOURCES · tap to inspect</span>
+              <div onClick="{{ sel1 }}" style="display: flex; flex-direction: column; gap: 7px; cursor: pointer;">
+                <div style="display: flex; align-items: center; gap: 9px;">
+                  <span style="width: 16px; height: 16px; border-radius: 4px; background: rgba(77,124,254,0.15); color: #9DB7FF; font-family: 'Geist Mono', monospace; font-size: 9.5px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">1</span>
+                  <span style="font-size: 11.5px; font-weight: 500; color: #C6CCDA;">Refund policy</span>
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #5C6478;">→ Duplicate charges</span>
+                  <span style="margin-left: auto; font-family: 'Geist Mono', monospace; font-size: 9.5px; color: #444B5C;">0.93</span>
+                </div>
+                <sc-if value="{{ show1 }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-left: 25px; border-left: 2px solid rgba(77,124,254,0.5); background: rgba(0,0,0,0.25); border-radius: 0 7px 7px 0; padding: 7px 11px; font-size: 11px; line-height: 1.55; color: #A9B2C4; font-style: italic; animation: plUp 0.25s ease both;">“Duplicate charges are refunded in full to the original payment method within 5–10 business days. A credit note is generated automatically.”</div>
+                </sc-if>
+              </div>
+              <div onClick="{{ sel2 }}" style="display: flex; flex-direction: column; gap: 7px; cursor: pointer;">
+                <div style="display: flex; align-items: center; gap: 9px;">
+                  <span style="width: 16px; height: 16px; border-radius: 4px; background: rgba(77,124,254,0.15); color: #9DB7FF; font-family: 'Geist Mono', monospace; font-size: 9.5px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">2</span>
+                  <span style="font-size: 11.5px; font-weight: 500; color: #C6CCDA;">Billing operations</span>
+                  <span style="font-family: 'Geist Mono', monospace; font-size: 10px; color: #5C6478;">→ Retried payment jobs</span>
+                  <span style="margin-left: auto; font-family: 'Geist Mono', monospace; font-size: 9.5px; color: #444B5C;">0.90</span>
+                </div>
+                <sc-if value="{{ show2 }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-left: 25px; border-left: 2px solid rgba(77,124,254,0.5); background: rgba(0,0,0,0.25); border-radius: 0 7px 7px 0; padding: 7px 11px; font-size: 11px; line-height: 1.55; color: #A9B2C4; font-style: italic; animation: plUp 0.25s ease both;">“A known race in the retry worker can produce duplicate invoices. Refund the newer invoice and link both refs in the resolution.”</div>
+                </sc-if>
+              </div>
+            </div>
+
+            <sc-if value="{{ heroPending }}" hint-placeholder-val="{{ true }}">
+              <div style="display: flex; gap: 7px;">
+                <button onClick="{{ approve }}" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; background: #4D7CFE; border: none; border-radius: 7px; padding: 8px 0; font-size: 11.5px; font-weight: 600; color: #fff; cursor: pointer;" style-hover="background: #5E89FF;"><span style="display: flex;">{{ checkIcon }}</span>Approve &amp; send</button>
+                <button onClick="{{ toggleEdit }}" style="display: flex; align-items: center; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 7px; padding: 8px 14px; font-size: 11.5px; color: #C6CCDA; cursor: pointer;" style-hover="border-color: rgba(77,124,254,0.5); color: #9DB7FF;">{{ editLabel }}</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ heroSent }}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; align-items: center; justify-content: center; gap: 7px; background: rgba(61,214,140,0.12); border: 1px solid rgba(61,214,140,0.35); border-radius: 7px; padding: 8px 0; font-size: 11.5px; font-weight: 600; color: #3DD68C; animation: plUp 0.3s ease both;"><span style="display: flex;">{{ checkIcon }}</span>Sent to Priya Raman · just now</div>
+            </sc-if>
+          </div>
+        </div>
+
+        <sc-if value="{{ heroPending }}" hint-placeholder-val="{{ true }}">
+          <div style="position: absolute; bottom: -16px; left: 22px; display: inline-flex; align-items: center; gap: 7px; background: #161B28; border: 1px solid rgba(255,255,255,0.1); border-radius: 99px; padding: 5px 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            <span style="width: 6px; height: 6px; border-radius: 99px; background: #4D7CFE;"></span>
+            <span style="font-size: 11px; color: #C6CCDA;">Drafted in 1.2s · awaiting your approval</span>
+          </div>
+        </sc-if>
+        <sc-if value="{{ heroSent }}" hint-placeholder-val="{{ false }}">
+          <div style="position: absolute; bottom: -16px; left: 22px; display: inline-flex; align-items: center; gap: 7px; background: #161B28; border: 1px solid rgba(61,214,140,0.35); border-radius: 99px; padding: 5px 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); animation: plUp 0.3s ease both;">
+          <span style="display: flex; width: 16px; height: 16px; border-radius: 99px; background: rgba(61,214,140,0.16); color: #3DD68C; align-items: center; justify-content: center;">{{ checkIcon }}</span>
+          <span style="font-size: 11px; color: #C6CCDA;">Approved by <span style="font-weight: 600; color: #E6EAF2;">you</span> · sent just now</span>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANIMATED PRODUCT DEMO (isolated component — its state never re-renders this page) -->
+  <div id="proofline-demo" style="max-width: 1010px; margin: 0 auto; padding: 22px 28px 30px; scroll-margin-top: 70px; animation: plUp 0.7s 0.34s ease both;">
+    <dc-import name="DemoStage" hint-size="100%,520px"></dc-import>
+  </div>
+
+  <!-- integrations marquee -->
+  <div style="max-width: 1080px; margin: 0 auto; padding: 30px 28px 70px; display: flex; flex-direction: column; align-items: center; gap: 18px;">
+    <span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.14em; color: #444B5C;">CONNECTS YOUR WHOLE SUPPORT STACK</span>
+    <div style="width: 100%; overflow: hidden; mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);">
+      <div style="display: flex; width: max-content; animation: plMarquee 30s linear infinite;" style-hover="animation-play-state: paused;">
+        <sc-for list="{{ marquee }}" as="ig" hint-placeholder-count="20">
+          <div style="display: flex; align-items: center; gap: 9px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.07); border-radius: 99px; padding: 7px 16px 7px 8px; margin-right: 12px; flex-shrink: 0;" style-hover="border-color: rgba(77,124,254,0.4); background: rgba(77,124,254,0.05);">
+            <span style="width: 24px; height: 24px; border-radius: 99px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 600; color: {{ ig.fg }};">{{ ig.glyph }}</span>
+            <span style="font-size: 12.5px; font-weight: 500; color: #8A93A6; white-space: nowrap;">{{ ig.name }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- features -->
+  <div style="max-width: 1080px; margin: 0 auto; padding: 0 28px 80px;">
+    <div data-reveal="0" style="max-width: 520px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 36px;">
+      <span style="font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: #4D7CFE;">EVERYTHING IN ONE PLACE</span>
+      <h2 style="margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.15;">Built for teams who refuse to send a guess.</h2>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;">
+
+      <!-- 1 · Unified inbox -->
+      <div data-reveal="0" style="border: 1px solid rgba(255,255,255,0.07); background: #0C0F17; border-radius: 13px; overflow: hidden; display: flex; flex-direction: column; transition: border-color 0.2s, transform 0.25s, box-shadow 0.25s;" style-hover="border-color: rgba(77,124,254,0.4); transform: translateY(-3px); box-shadow: 0 18px 50px rgba(0,0,0,0.45);">
+        <div style="height: 124px; border-bottom: 1px solid rgba(255,255,255,0.06); background: linear-gradient(180deg, rgba(77,124,254,0.05), rgba(0,0,0,0.22)); position: relative; overflow: hidden; padding: 13px 14px;">
+          <div style="display: flex; align-items: center; gap: 7px; padding: 6px 9px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.06); border-radius: 7px; margin-bottom: 6px; animation: plRowLoop 0.5s ease both; animation-delay: 0.05s;">
+            <span style="width: 7px; height: 7px; border-radius: 99px; background: #4D7CFE; flex-shrink: 0;"></span>
+            <span style="width: 46px; height: 5px; border-radius: 99px; background: rgba(255,255,255,0.16);"></span>
+            <span style="flex: 1; height: 5px; border-radius: 99px; background: rgba(255,255,255,0.07);"></span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 8.5px; color: #5C6478;">web</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 7px; padding: 6px 9px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.06); border-radius: 7px; margin-bottom: 6px; animation: plRowLoop 0.5s ease both; animation-delay: 0.18s;">
+            <span style="width: 7px; height: 7px; border-radius: 99px; background: #F5B74E; flex-shrink: 0;"></span>
+            <span style="width: 58px; height: 5px; border-radius: 99px; background: rgba(255,255,255,0.16);"></span>
+            <span style="flex: 1; height: 5px; border-radius: 99px; background: rgba(255,255,255,0.07);"></span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 8.5px; color: #5C6478;">email</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 7px; padding: 6px 9px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.06); border-radius: 7px; animation: plRowLoop 0.5s ease both; animation-delay: 0.31s;">
+            <span style="width: 7px; height: 7px; border-radius: 99px; background: #8B5CF6; flex-shrink: 0;"></span>
+            <span style="width: 40px; height: 5px; border-radius: 99px; background: rgba(255,255,255,0.16);"></span>
+            <span style="flex: 1; height: 5px; border-radius: 99px; background: rgba(255,255,255,0.07);"></span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 8.5px; color: #5C6478;">slack</span>
+          </div>
+          <span style="position: absolute; right: 12px; bottom: 9px; font-family: 'Geist Mono', monospace; font-size: 9px; color: #444B5C;">3 channels → 1 queue</span>
+        </div>
+        <div style="padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 9px;">
+          <div style="font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em;">Unified inbox</div>
+          <div style="font-size: 12.5px; line-height: 1.6; color: #8A93A6; text-wrap: pretty;">Website chat, email, and Slack flow into one queue with shared assignment, priorities, and SLAs.</div>
+        </div>
+      </div>
+
+      <!-- 2 · Replies with citations -->
+      <div data-reveal="70" style="border: 1px solid rgba(255,255,255,0.07); background: #0C0F17; border-radius: 13px; overflow: hidden; display: flex; flex-direction: column; transition: border-color 0.2s, transform 0.25s, box-shadow 0.25s;" style-hover="border-color: rgba(77,124,254,0.4); transform: translateY(-3px); box-shadow: 0 18px 50px rgba(0,0,0,0.45);">
+        <div style="height: 124px; border-bottom: 1px solid rgba(255,255,255,0.06); background: linear-gradient(180deg, rgba(77,124,254,0.05), rgba(0,0,0,0.22)); position: relative; overflow: hidden; padding: 13px 14px;">
+          <div style="background: #131826; border: 1px solid rgba(77,124,254,0.22); border-radius: 8px; padding: 9px 11px; display: flex; flex-direction: column; gap: 6px;">
+            <span style="height: 5px; width: 100%; border-radius: 99px; background: linear-gradient(90deg, rgba(255,255,255,0.07) 25%, rgba(157,183,255,0.28) 50%, rgba(255,255,255,0.07) 75%); background-size: 200% 100%; background-position: 60% 0;"></span>
+            <span style="height: 5px; width: 82%; border-radius: 99px; background: linear-gradient(90deg, rgba(255,255,255,0.07) 25%, rgba(157,183,255,0.28) 50%, rgba(255,255,255,0.07) 75%); background-size: 200% 100%; background-position: 60% 0;"></span>
+            <span style="height: 5px; width: 58%; border-radius: 99px; background: linear-gradient(90deg, rgba(255,255,255,0.07) 25%, rgba(157,183,255,0.28) 50%, rgba(255,255,255,0.07) 75%); background-size: 200% 100%; background-position: 60% 0;"></span>
+          </div>
+          <div style="display: flex; gap: 6px; margin-top: 9px; align-items: center;">
+            <span style="font-size: 9.5px; font-family: 'Geist Mono', monospace; color: #9DB7FF; background: rgba(77,124,254,0.14); border: 1px solid rgba(77,124,254,0.3); border-radius: 5px; padding: 2px 7px; animation: plPopLoop 0.45s ease both; animation-delay: 0.35s;">Billing &amp; Plans ¹</span>
+            <span style="font-size: 9.5px; font-family: 'Geist Mono', monospace; color: #9DB7FF; background: rgba(77,124,254,0.14); border: 1px solid rgba(77,124,254,0.3); border-radius: 5px; padding: 2px 7px; animation: plPopLoop 0.45s ease both; animation-delay: 0.48s;">Runbook ²</span>
+            <span style="margin-left: auto; font-size: 9.5px; font-family: 'Geist Mono', monospace; color: #3DD68C;">0.92 conf</span>
+          </div>
+        </div>
+        <div style="padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 9px;">
+          <div style="font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em;">Replies with citations</div>
+          <div style="font-size: 12.5px; line-height: 1.6; color: #8A93A6; text-wrap: pretty;">Every AI draft links the exact doc passages it used — agents verify in seconds, not minutes.</div>
+        </div>
+      </div>
+
+      <!-- 3 · Smart routing -->
+      <div data-reveal="140" style="border: 1px solid rgba(255,255,255,0.07); background: #0C0F17; border-radius: 13px; overflow: hidden; display: flex; flex-direction: column; transition: border-color 0.2s, transform 0.25s, box-shadow 0.25s;" style-hover="border-color: rgba(77,124,254,0.4); transform: translateY(-3px); box-shadow: 0 18px 50px rgba(0,0,0,0.45);">
+        <div style="height: 124px; border-bottom: 1px solid rgba(255,255,255,0.06); background: linear-gradient(180deg, rgba(77,124,254,0.05), rgba(0,0,0,0.22)); position: relative; overflow: hidden; padding: 13px 14px;">
+          <div style="display: flex; align-items: center; gap: 7px; padding: 6px 9px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.06); border-radius: 7px;">
+            <span style="width: 14px; height: 14px; border-radius: 99px; background: hsl(210 45% 20%); color: hsl(210 75% 72%); font-size: 7px; font-weight: 600; display: flex; align-items: center; justify-content: center;">AC</span>
+            <span style="width: 72px; height: 5px; border-radius: 99px; background: rgba(255,255,255,0.16);"></span>
+            <span style="flex: 1; height: 5px; border-radius: 99px; background: rgba(255,255,255,0.07);"></span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; margin: 11px 0 0 8px;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9px; color: #5C6478;">auto-tag</span>
+            <span style="font-size: 9.5px; color: #9DB7FF; background: rgba(77,124,254,0.12); border: 1px solid rgba(77,124,254,0.3); border-radius: 99px; padding: 1.5px 8px; animation: plPopLoop 0.45s ease both; animation-delay: 0.2s;">billing</span>
+            <span style="font-size: 9.5px; color: #F8A0A0; background: rgba(243,108,108,0.08); border: 1px solid rgba(243,108,108,0.3); border-radius: 99px; padding: 1.5px 8px; animation: plPopLoop 0.45s ease both; animation-delay: 0.33s;">urgent</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; margin: 9px 0 0 8px; animation: plPopLoop 0.45s ease both; animation-delay: 0.5s;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9px; color: #5C6478;">→ routed to</span>
+            <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 9.5px; color: #C4B0F8; background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.3); border-radius: 99px; padding: 1.5px 8px 1.5px 3px;">
+              <span style="width: 12px; height: 12px; border-radius: 99px; background: rgba(139,92,246,0.25); font-size: 6.5px; font-weight: 600; display: flex; align-items: center; justify-content: center;">M</span>
+              <span>Billing team</span>
+            </span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9px; color: #3DD68C;">in 0.4s</span>
+          </div>
+        </div>
+        <div style="padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 9px;">
+          <div style="font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em;">Smart routing &amp; auto-tags</div>
+          <div style="font-size: 12.5px; line-height: 1.6; color: #8A93A6; text-wrap: pretty;">Tickets are classified, tagged, and routed to the right team the moment they arrive.</div>
+        </div>
+      </div>
+
+      <!-- 4 · Knowledge base sync -->
+      <div data-reveal="0" style="border: 1px solid rgba(255,255,255,0.07); background: #0C0F17; border-radius: 13px; overflow: hidden; display: flex; flex-direction: column; transition: border-color 0.2s, transform 0.25s, box-shadow 0.25s;" style-hover="border-color: rgba(77,124,254,0.4); transform: translateY(-3px); box-shadow: 0 18px 50px rgba(0,0,0,0.45);">
+        <div style="height: 124px; border-bottom: 1px solid rgba(255,255,255,0.06); background: linear-gradient(180deg, rgba(77,124,254,0.05), rgba(0,0,0,0.22)); position: relative; overflow: hidden; padding: 13px 14px;">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.06); border-radius: 7px; margin-bottom: 7px;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9px; color: #8A93A6;">refund-policy.pdf</span>
+            <span style="flex: 1;"></span>
+            <span style="width: 11px; height: 11px; border-radius: 99px; border: 1.5px solid rgba(245,183,78,0.25); background: #F5B74E;"></span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 8.5px; color: #F5B74E;">chunking…</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.06); border-radius: 7px;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9px; color: #8A93A6;">billing-and-plans.md</span>
+            <span style="flex: 1;"></span>
+            <span style="width: 6px; height: 6px; border-radius: 99px; background: #3DD68C;"></span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 8.5px; color: #3DD68C;">indexed · 48</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 5px; margin-top: 9px; margin-left: 2px; animation: plPopLoop 0.45s ease both; animation-delay: 0.5s;">
+            <span style="font-size: 9.5px; font-family: 'Geist Mono', monospace; color: #3DD68C; background: rgba(61,214,140,0.08); border: 1px solid rgba(61,214,140,0.25); border-radius: 5px; padding: 2px 7px;">+26 chunks citable</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9px; color: #444B5C;">synced from Notion</span>
+          </div>
+        </div>
+        <div style="padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 9px;">
+          <div style="font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em;">Knowledge base sync</div>
+          <div style="font-size: 12.5px; line-height: 1.6; color: #8A93A6; text-wrap: pretty;">Connect Notion, Google Docs, or upload files. Proofline keeps its sources fresh automatically.</div>
+        </div>
+      </div>
+
+      <!-- 5 · SLA tracking -->
+      <div data-reveal="70" style="border: 1px solid rgba(255,255,255,0.07); background: #0C0F17; border-radius: 13px; overflow: hidden; display: flex; flex-direction: column; transition: border-color 0.2s, transform 0.25s, box-shadow 0.25s;" style-hover="border-color: rgba(77,124,254,0.4); transform: translateY(-3px); box-shadow: 0 18px 50px rgba(0,0,0,0.45);">
+        <div style="height: 124px; border-bottom: 1px solid rgba(255,255,255,0.06); background: linear-gradient(180deg, rgba(77,124,254,0.05), rgba(0,0,0,0.22)); position: relative; overflow: hidden; padding: 16px 14px;">
+          <div style="display: flex; align-items: baseline;">
+            <span style="font-size: 10.5px; color: #8A93A6;">First response — TKT-1042</span>
+            <span style="margin-left: auto; font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #C6CCDA;">due 14m</span>
+          </div>
+          <div style="height: 7px; border-radius: 99px; background: rgba(255,255,255,0.07); overflow: hidden; margin-top: 9px;">
+            <div style="height: 100%; border-radius: 99px; width: 30%; animation: plSlaDrain 1.7s ease-out both; animation-delay: 0.2s;"></div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; margin-top: 11px;">
+            <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 9.5px; color: #F5B74E; background: rgba(245,183,78,0.07); border: 1px solid rgba(245,183,78,0.3); border-radius: 99px; padding: 2.5px 9px; animation: plWarnPop 0.5s ease both; animation-delay: 1.7s;">
+              <span style="width: 5px; height: 5px; border-radius: 99px; background: #F5B74E;"></span>
+              <span>escalation armed → notify #support-oncall</span>
+            </span>
+          </div>
+        </div>
+        <div style="padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 9px;">
+          <div style="font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em;">SLA tracking</div>
+          <div style="font-size: 12.5px; line-height: 1.6; color: #8A93A6; text-wrap: pretty;">Live countdowns on every conversation, with escalation rules before a breach ever happens.</div>
+        </div>
+      </div>
+
+      <!-- 6 · Analytics -->
+      <div data-reveal="140" style="border: 1px solid rgba(255,255,255,0.07); background: #0C0F17; border-radius: 13px; overflow: hidden; display: flex; flex-direction: column; transition: border-color 0.2s, transform 0.25s, box-shadow 0.25s;" style-hover="border-color: rgba(77,124,254,0.4); transform: translateY(-3px); box-shadow: 0 18px 50px rgba(0,0,0,0.45);">
+        <div style="height: 124px; border-bottom: 1px solid rgba(255,255,255,0.06); background: linear-gradient(180deg, rgba(77,124,254,0.05), rgba(0,0,0,0.22)); position: relative; overflow: hidden; padding: 13px 14px; display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: center;">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 9px; color: #444B5C;">draft acceptance · 7d</span>
+            <span style="margin-left: auto; font-size: 9.5px; font-family: 'Geist Mono', monospace; color: #3DD68C; background: rgba(61,214,140,0.08); border: 1px solid rgba(61,214,140,0.25); border-radius: 5px; padding: 1.5px 7px;">↑ 87%</span>
+          </div>
+          <div style="flex: 1; display: flex; align-items: flex-end; gap: 5px; margin-top: 8px;">
+            <span style="flex: 1; height: 38px; border-radius: 3px; background: linear-gradient(180deg, #5E89FF, rgba(77,124,254,0.35)); transform-origin: bottom; animation: plWave 0.55s ease-out both; animation-delay: 0.12s;"></span>
+            <span style="flex: 1; height: 52px; border-radius: 3px; background: linear-gradient(180deg, #5E89FF, rgba(77,124,254,0.35)); transform-origin: bottom; animation: plWave 0.55s ease-out both; animation-delay: 0.18s;"></span>
+            <span style="flex: 1; height: 44px; border-radius: 3px; background: linear-gradient(180deg, #5E89FF, rgba(77,124,254,0.35)); transform-origin: bottom; animation: plWave 0.55s ease-out both; animation-delay: 0.24s;"></span>
+            <span style="flex: 1; height: 60px; border-radius: 3px; background: linear-gradient(180deg, #5E89FF, rgba(77,124,254,0.35)); transform-origin: bottom; animation: plWave 0.55s ease-out both; animation-delay: 0.3s;"></span>
+            <span style="flex: 1; height: 50px; border-radius: 3px; background: linear-gradient(180deg, #5E89FF, rgba(77,124,254,0.35)); transform-origin: bottom; animation: plWave 0.55s ease-out both; animation-delay: 0.36s;"></span>
+            <span style="flex: 1; height: 66px; border-radius: 3px; background: linear-gradient(180deg, #5E89FF, rgba(77,124,254,0.35)); transform-origin: bottom; animation: plWave 0.55s ease-out both; animation-delay: 0.42s;"></span>
+            <span style="flex: 1; height: 58px; border-radius: 3px; background: linear-gradient(180deg, #5E89FF, rgba(77,124,254,0.35)); transform-origin: bottom; animation: plWave 0.55s ease-out both; animation-delay: 0.48s;"></span>
+            <span style="flex: 1; height: 72px; border-radius: 3px; background: linear-gradient(180deg, #3DD68C, rgba(61,214,140,0.3)); transform-origin: bottom; animation: plWave 0.55s ease-out both; animation-delay: 0.54s;"></span>
+          </div>
+        </div>
+        <div style="padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 9px;">
+          <div style="font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em;">Analytics</div>
+          <div style="font-size: 12.5px; line-height: 1.6; color: #8A93A6; text-wrap: pretty;">Acceptance rates, confidence distributions, and most-cited docs — see exactly where AI helps.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- how it works -->
+  <div style="border-top: 1px solid rgba(255,255,255,0.06); border-bottom: 1px solid rgba(255,255,255,0.06); background: #090C13;">
+    <div style="max-width: 1080px; margin: 0 auto; padding: 70px 28px;">
+      <div data-reveal="0" style="text-align: center; margin-bottom: 44px;">
+        <span style="font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: #4D7CFE;">HOW IT WORKS</span>
+        <h2 style="margin: 10px 0 0; font-size: 30px; font-weight: 700; letter-spacing: -0.03em;">Four steps to a faster queue</h2>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; position: relative;">
+        <div style="position: absolute; top: 19px; left: 12.5%; right: 12.5%; height: 1px; background: linear-gradient(90deg, rgba(77,124,254,0), rgba(77,124,254,0.4), rgba(77,124,254,0.4), rgba(77,124,254,0));"></div>
+        <div style="position: absolute; top: 16.5px; width: 6px; height: 6px; border-radius: 99px; background: #7DA2FF; box-shadow: 0 0 12px rgba(77,124,254,0.9); animation: plTravelX 9s ease-in-out infinite;"></div>
+        <sc-for list="{{ steps }}" as="st" hint-placeholder-count="4">
+          <div data-reveal="{{ st.rev }}" style="display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; padding: 0 16px; position: relative;">
+            <div style="width: 38px; height: 38px; border-radius: 99px; background: #0C0F17; border: 1px solid rgba(77,124,254,0.4); display: flex; align-items: center; justify-content: center; font-family: 'Geist Mono', monospace; font-size: 13px; font-weight: 600; color: #7DA2FF; box-shadow: 0 0 20px rgba(77,124,254,0.15);">{{ st.n }}</div>
+            <div style="font-size: 14px; font-weight: 600;">{{ st.title }}</div>
+            <div style="font-size: 12px; line-height: 1.55; color: #8A93A6; text-wrap: pretty;">{{ st.desc }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- pricing -->
+  <div style="max-width: 1080px; margin: 0 auto; padding: 80px 28px;">
+    <div data-reveal="0" style="text-align: center; margin-bottom: 40px;">
+      <span style="font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: #4D7CFE;">PRICING</span>
+      <h2 style="margin: 10px 0 0; font-size: 30px; font-weight: 700; letter-spacing: -0.03em;">Start free. Scale when the queue does.</h2>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-items: stretch;">
+      <sc-for list="{{ plans }}" as="pl" hint-placeholder-count="3">
+        <div data-reveal="{{ pl.rev }}" style="border: 1px solid {{ pl.bd }}; background: {{ pl.bg }}; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 14px; position: relative; {{ pl.anim }} transition: transform 0.25s;" style-hover="transform: translateY(-4px);">
+          <span style="position: absolute; top: -10px; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; white-space: nowrap; color: #fff; background: linear-gradient(90deg, #4D7CFE, #8B5CF6, #4D7CFE); background-size: 200% 100%; animation: plSweep 5.5s linear infinite; border-radius: 99px; padding: 3px 12px; display: {{ pl.popDisp }};">MOST POPULAR</span>
+          <div style="font-size: 14px; font-weight: 600;">{{ pl.name }}</div>
+          <div style="display: flex; align-items: baseline; gap: 5px;">
+            <span style="font-size: 34px; font-weight: 700; letter-spacing: -0.03em; font-family: 'Geist Mono', monospace;">{{ pl.price }}</span>
+            <span style="font-size: 12px; color: #5C6478;">{{ pl.per }}</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; flex: 1;">
+            <sc-for list="{{ pl.feats }}" as="ft" hint-placeholder-count="4">
+              <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; color: #A9B2C4; line-height: 1.45;">
+                <span style="display: flex; color: #4D7CFE; margin-top: 2px; flex-shrink: 0;">{{ checkIcon }}</span>
+                <span>{{ ft.f }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <a href="Proofline App.dc.html" style="text-align: center; font-size: 13px; font-weight: 600; text-decoration: none; border-radius: 8px; padding: 9px 0; color: {{ pl.btnFg }}; background: {{ pl.btnBg }}; border: 1px solid {{ pl.btnBd }};" style-hover="opacity: 0.88;">{{ pl.btn }}</a>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div style="border-top: 1px solid rgba(255,255,255,0.06); position: relative; overflow: hidden;">
+    <div style="position: absolute; bottom: -200px; left: 50%; transform: translateX(-50%); width: 700px; height: 400px; background: radial-gradient(ellipse at center, rgba(77,124,254,0.16), rgba(77,124,254,0) 65%); pointer-events: none; animation: plGlow 5s ease infinite;"></div>
+    <div style="position: absolute; inset: 0; pointer-events: none;">
+      <span style="position: absolute; left: 9%; bottom: 30px; font-family: 'Geist Mono', monospace; font-size: 10px; color: #9DB7FF; background: rgba(77,124,254,0.07); border: 1px solid rgba(77,124,254,0.22); border-radius: 99px; padding: 3px 10px; white-space: nowrap; animation: plFloatChip 11s linear infinite; animation-delay: -1s;">Billing &amp; Plans ¹</span>
+      <span style="position: absolute; left: 22%; bottom: 10px; font-family: 'Geist Mono', monospace; font-size: 10px; color: #3DD68C; background: rgba(61,214,140,0.06); border: 1px solid rgba(61,214,140,0.2); border-radius: 99px; padding: 3px 10px; white-space: nowrap; animation: plFloatChip 13s linear infinite; animation-delay: -7s;">0.92 conf</span>
+      <span style="position: absolute; left: 71%; bottom: 24px; font-family: 'Geist Mono', monospace; font-size: 10px; color: #9DB7FF; background: rgba(77,124,254,0.07); border: 1px solid rgba(77,124,254,0.22); border-radius: 99px; padding: 3px 10px; white-space: nowrap; animation: plFloatChip 12s linear infinite; animation-delay: -4s;">Refund policy ²</span>
+      <span style="position: absolute; left: 84%; bottom: 6px; font-family: 'Geist Mono', monospace; font-size: 10px; color: #3DD68C; background: rgba(61,214,140,0.06); border: 1px solid rgba(61,214,140,0.2); border-radius: 99px; padding: 3px 10px; white-space: nowrap; animation: plFloatChip 14s linear infinite; animation-delay: -10s;">SLA met ✓</span>
+      <span style="position: absolute; left: 47%; bottom: 0px; font-family: 'Geist Mono', monospace; font-size: 10px; color: #C4B0F8; background: rgba(139,92,246,0.07); border: 1px solid rgba(139,92,246,0.22); border-radius: 99px; padding: 3px 10px; white-space: nowrap; animation: plFloatChip 12.5s linear infinite; animation-delay: -8.5s;">approved by Maya</span>
+    </div>
+    <div style="max-width: 680px; margin: 0 auto; padding: 90px 28px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 20px; position: relative;">
+      <h2 data-reveal="0" style="margin: 0; font-size: 38px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1;">Stop guessing.<br>Start answering with <span style="background: linear-gradient(100deg, #7DA2FF 20%, #4D7CFE 40%, #8B5CF6 60%, #7DA2FF 80%); background-size: 250% 100%; animation: plSweep 7s linear infinite; -webkit-background-clip: text; background-clip: text; color: rgba(0,0,0,0);">proof.</span></h2>
+      <div data-reveal="120" style="display: flex; gap: 12px;">
+        <a href="Proofline App.dc.html" style="font-size: 14px; font-weight: 600; color: #fff; text-decoration: none; background: #4D7CFE; border-radius: 9px; padding: 11px 24px; box-shadow: 0 4px 28px rgba(77,124,254,0.45); transition: transform 0.2s;" style-hover="background: #5E89FF; transform: translateY(-2px);">Start free</a>
+        <a href="Proofline App.dc.html" style="font-size: 14px; font-weight: 500; color: #C6CCDA; text-decoration: none; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 9px; padding: 11px 22px; transition: transform 0.2s;" style-hover="background: rgba(255,255,255,0.09); transform: translateY(-2px);">View demo</a>
+      </div>
+    </div>
+    <div style="border-top: 1px solid rgba(255,255,255,0.05); padding: 22px 28px; display: flex; align-items: center; gap: 10px; max-width: 1080px; margin: 0 auto; font-size: 12px; color: #444B5C; position: relative;">
+      <div style="width: 18px; height: 18px; border-radius: 5px; background: linear-gradient(135deg, #4D7CFE, #3B5FD9); display: flex; align-items: center; justify-content: center;">{{ logoIconSm }}</div>
+      <span>Proofline © 2026</span>
+      <span style="margin-left: auto; display: flex; gap: 18px;">
+        <span style="cursor: pointer;" style-hover="color: #8A93A6;">Privacy</span>
+        <span style="cursor: pointer;" style-hover="color: #8A93A6;">Terms</span>
+        <span style="cursor: pointer;" style-hover="color: #8A93A6;">Security</span>
+        <span style="cursor: pointer;" style-hover="color: #8A93A6;">Status</span>
+      </span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  // Only the hero proof-card is interactive; the animated demo lives in its
+  // own child (DemoStage), so the rest of the page never re-renders.
+  state = { sel: 0, sent: false, editing: false, draft: "Confirmed — invoice #INV-2235 duplicates #INV-2231. I've issued a full refund to your original card — it'll appear within 5–10 business days.", counted: false, nA: 0, nB: 0, nC: 0, nD: 0 };
+
+  componentDidMount() {
+    // count-up stats — animate once shortly after load (the row lives in the hero)
+    this._countTimer = setTimeout(() => {
+      if (this.state.counted) return;
+      this.setState({ counted: true });
+      const dur = 1150, t0 = performance.now(), ease = (t) => 1 - Math.pow(1 - t, 3);
+      const tick = (now) => {
+        const e = ease(Math.min(1, (now - t0) / dur));
+        this.setState({ nA: Math.round(e * 87), nB: Math.round(e * 4), nC: Math.round(e * 12), nD: Math.round(e * 100) });
+        if ((now - t0) < dur) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }, 360);
+
+    const els = Array.from(document.querySelectorAll('[data-reveal]'));
+    const toReveal = [];
+    els.forEach(el => {
+      const r = el.getBoundingClientRect();
+      // Don't hide anything already in view — no flash for above-the-fold content.
+      if (r.top > window.innerHeight * 0.92) {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(26px)';
+        toReveal.push(el);
+      }
+    });
+    this._io = new IntersectionObserver((entries) => {
+      entries.forEach(en => {
+        if (!en.isIntersecting) return;
+        const el = en.target;
+        const d = parseInt(el.getAttribute('data-reveal') || '0', 10);
+        el.style.transition = 'opacity 0.75s cubic-bezier(0.22,1,0.36,1) ' + d + 'ms, transform 0.75s cubic-bezier(0.22,1,0.36,1) ' + d + 'ms';
+        el.style.opacity = '1';
+        el.style.transform = 'none';
+        this._io.unobserve(el);
+      });
+    }, { threshold: 0.12 });
+    toReveal.forEach(el => this._io.observe(el));
+  }
+  componentWillUnmount() { if (this._io) this._io.disconnect(); if (this._countTimer) clearTimeout(this._countTimer); }
+
+  svg(paths, s) {
+    return React.createElement('svg', { width: s, height: s, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block' } },
+      ...paths.map((d, i) => React.createElement('path', { key: i, d })));
+  }
+
+  renderVals() {
+    const steps = [
+      { n: '1', rev: '0', title: 'Connect channels', desc: 'Drop in the chat widget, link Gmail and Slack. Five minutes, no code beyond a snippet.' },
+      { n: '2', rev: '80', title: 'Upload your docs', desc: 'Proofline indexes your help center, runbooks, and policies into citable chunks.' },
+      { n: '3', rev: '160', title: 'Review AI drafts', desc: 'Each reply arrives grounded with citations and a confidence score. You stay in control.' },
+      { n: '4', rev: '240', title: 'Resolve faster', desc: 'Approve in one click. Low-confidence drafts are flagged for a closer look — never auto-sent.' }
+    ];
+    const plans = [
+      { name: 'Free', rev: '0', price: '$0', per: 'forever', btn: 'Start free', popDisp: 'none', anim: '', bd: 'rgba(255,255,255,0.08)', bg: '#0C0F17', btnFg: '#C6CCDA', btnBg: 'rgba(255,255,255,0.05)', btnBd: 'rgba(255,255,255,0.1)', feats: [{ f: '1 channel · 3 seats' }, { f: '100 AI drafts / month' }, { f: '25 indexed documents' }, { f: 'Community support' }] },
+      { name: 'Growth', rev: '100', price: '$49', per: 'per seat / month', btn: 'Start 14-day trial', popDisp: 'inline', anim: 'animation: plCardGlow 6s ease infinite;', bd: 'rgba(77,124,254,0.45)', bg: 'linear-gradient(170deg, rgba(77,124,254,0.08), rgba(77,124,254,0.015)), #0C0F17', btnFg: '#fff', btnBg: '#4D7CFE', btnBd: 'transparent', feats: [{ f: 'All channels · unlimited seats' }, { f: 'Unlimited AI drafts with citations' }, { f: 'Automations & smart routing' }, { f: 'SLA tracking + analytics' }, { f: 'Notion & Google Docs sync' }] },
+      { name: 'Scale', rev: '200', price: 'Custom', per: 'annual', btn: 'Talk to sales', popDisp: 'none', anim: '', bd: 'rgba(255,255,255,0.08)', bg: '#0C0F17', btnFg: '#C6CCDA', btnBg: 'rgba(255,255,255,0.05)', btnBd: 'rgba(255,255,255,0.1)', feats: [{ f: 'SAML SSO & SCIM' }, { f: 'Audit logs & data residency' }, { f: 'Custom AI policies' }, { f: 'Dedicated support engineer' }] }
+    ];
+    return {
+      logoIcon: this.svg(['M3.5 8.5 6.5 11.5 12.5 4.5'], 13),
+      logoIconSm: this.svg(['M3.5 8.5 6.5 11.5 12.5 4.5'], 10),
+      checkIcon: this.svg(['M3.5 8.5 6.5 11.5 12.5 4.5'], 12),
+      aiIcon: this.svg(['M8 2.5l1.4 4.1L13.5 8l-4.1 1.4L8 13.5 6.6 9.4 2.5 8l4.1-1.4z'], 14),
+      // interactive hero proof-card
+      heroPending: !this.state.sent,
+      heroSent: this.state.sent,
+      heroView: !this.state.editing,
+      heroEditing: this.state.editing,
+      heroDraft: this.state.draft,
+      onHeroDraft: (e) => this.setState({ draft: e.target.value }),
+      sel1: () => this.setState(s => ({ sel: s.sel === 1 ? 0 : 1 })),
+      sel2: () => this.setState(s => ({ sel: s.sel === 2 ? 0 : 2 })),
+      show1: this.state.sel === 1,
+      show2: this.state.sel === 2,
+      row1Bd: this.state.sel === 1 ? 'rgba(77,124,254,0.45)' : 'rgba(255,255,255,0)',
+      row2Bd: this.state.sel === 2 ? 'rgba(77,124,254,0.45)' : 'rgba(255,255,255,0)',
+      ph1Bg: this.state.sel === 1 ? 'rgba(77,124,254,0.45)' : 'rgba(77,124,254,0.28)',
+      ph2Bg: this.state.sel === 2 ? 'rgba(77,124,254,0.45)' : 'rgba(77,124,254,0.28)',
+      approve: () => this.setState({ sent: true, editing: false }),
+      toggleEdit: () => this.setState(s => ({ editing: !s.editing })),
+      editLabel: this.state.editing ? 'Done' : 'Edit',
+      numA: this.state.nA, numB: this.state.nB, numC: this.state.nC, numD: this.state.nD,
+      marquee: (() => {
+        const items = [
+          { glyph: '</>', name: 'Website Chat', fg: '#9DB7FF' },
+          { glyph: 'M', name: 'Gmail', fg: '#F8A0A0' },
+          { glyph: '#', name: 'Slack', fg: '#C4B0F8' },
+          { glyph: 'N', name: 'Notion', fg: '#E6EAF2' },
+          { glyph: '$', name: 'Stripe', fg: '#C4B0F8' },
+          { glyph: 'L', name: 'Linear', fg: '#9DB7FF' },
+          { glyph: 'GH', name: 'GitHub', fg: '#E6EAF2' },
+          { glyph: 'Z', name: 'Zapier', fg: '#F5B74E' },
+          { glyph: 'S', name: 'Twilio SMS', fg: '#F5B74E' },
+          { glyph: 'G', name: 'Google Docs', fg: '#9DB7FF' }
+        ];
+        return [...items, ...items];
+      })(),
+      steps, plans
+    };
+  }
+}
+</script>
+</body>
+</html>
