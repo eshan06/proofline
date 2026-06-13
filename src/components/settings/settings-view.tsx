@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { useWorkspace, useWorkspaceMutation } from "@/hooks/use-workspace";
+import { useEscToClose } from "@/hooks/use-esc";
 import { api } from "@/lib/api-client";
 import { toast } from "@/stores/toasts";
 import { agents } from "@/data/workspace";
@@ -252,6 +253,7 @@ function AuditTab({
 function InviteModal({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<MemberRole>("Agent");
+  useEscToClose(onClose);
   const invite = useWorkspaceMutation<{ email: string; role: MemberRole }>({
     mutationFn: (vars) => api.inviteMember(vars),
     onSuccessToast: ({ email }) => `Invite sent to ${email}`,
