@@ -15,6 +15,7 @@ export async function startSession(type: "regular" | "demo"): Promise<SessionRec
   const jar = await cookies();
   jar.set(SESSION_COOKIE, record.id, {
     httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: type === "demo" ? 60 * 30 : 60 * 60 * 12,

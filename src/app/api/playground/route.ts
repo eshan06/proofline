@@ -1,6 +1,6 @@
 import { playgroundRequestSchema } from "@/lib/schemas";
 import { ApiError, handleApi, parseBody, requireSession } from "@/server/api";
-import { draftProvider } from "@/server/ai/mock-provider";
+import { draftProvider } from "@/server/ai";
 import { runAutomations } from "@/server/automations/engine";
 import { consumeAiCall, findTicket, recordAutomationRun } from "@/server/store";
 

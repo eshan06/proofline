@@ -58,7 +58,7 @@ export interface MutableWorkspace {
 
 const DEMO_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const REGULAR_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
-export const DEMO_AI_CALL_LIMIT = 25;
+export const DEMO_AI_CALL_LIMIT = Number(process.env.DEMO_AI_CALL_LIMIT) || 25;
 
 /** Survive Next.js dev-server module reloads. */
 const globalStore = globalThis as unknown as {

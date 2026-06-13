@@ -1,6 +1,6 @@
 import { draftActionSchema } from "@/lib/schemas";
 import { ApiError, handleApi, parseBody, requireSession } from "@/server/api";
-import { draftProvider } from "@/server/ai/mock-provider";
+import { draftProvider } from "@/server/ai";
 import { runAutomations } from "@/server/automations/engine";
 import { consumeAiCall, findTicket, NotFoundError, recordAutomationRun, setDraft } from "@/server/store";
 import { seedCustomers } from "@/data/workspace";

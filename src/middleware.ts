@@ -21,6 +21,7 @@ export function middleware(req: NextRequest) {
   req.cookies.set(SESSION_COOKIE, id);
   res.cookies.set(SESSION_COOKIE, id, {
     httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 12,

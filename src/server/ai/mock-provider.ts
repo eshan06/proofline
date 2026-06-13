@@ -91,5 +91,5 @@ export function mockAnswer(question: string, kb: KbDoc[]): PlaygroundResult {
   };
 }
 
-/** Singleton used by route handlers. Swap here for a real provider. */
-export const draftProvider: DraftProvider = new MockDraftProvider();
+/** The mock singleton. Provider selection happens in ./index.ts. */
+export const mockDraftProvider: DraftProvider = new MockDraftProvider();
