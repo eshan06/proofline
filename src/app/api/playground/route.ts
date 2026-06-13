@@ -1,6 +1,6 @@
 import { playgroundRequestSchema } from "@/lib/schemas";
 import { ApiError, handleApi, parseBody, requireSession } from "@/server/api";
-import { draftProvider } from "@/server/ai";
+import { getDraftProvider } from "@/server/ai";
 import { runAutomations } from "@/server/automations/engine";
 import { repo } from "@/server/repository";
 
@@ -16,7 +16,9 @@ export async function POST(req: Request) {
       r.getKbDocs(session.workspaceId),
       r.getCopilot(session.workspaceId),
     ]);
-    const result = await draftProvider.answer(body.question, kbDocs, { threshold: copilot.threshold / 100 });
+    const result = await getDraftProvider(session.workspaceId).answer(body.question, kbDocs, {
+      threshold: copilot.threshold / 100,
+    });
 
     // A low-confidence playground answer trips the safety net, just like a live
     // draft — automations are real, not display data.

@@ -1,36 +1,19 @@
 import type { DraftProvider } from "./provider";
 import { mockDraftProvider } from "./mock-provider";
+import { RagDraftProvider } from "./rag-provider";
+import { hasDatabase } from "@/server/db/client";
 
 /**
- * Provider selection. The UI and route handlers depend only on the
- * DraftProvider interface, so swapping to a real LLM-backed RAG pipeline is an
- * env-var change here — no UI churn.
+ * Draft-provider selection.
  *
- *   AI_PROVIDER=mock      (default) fixture-backed, deterministic, no network
- *   AI_PROVIDER=anthropic real provider (wire up in the marked branch)
- *   AI_PROVIDER=openai    real provider (wire up in the marked branch)
+ * - With a database, the real RAG provider runs pgvector retrieval +
+ *   (templated or LLM) drafting, scoped to the caller's workspace.
+ * - Without a database, the deterministic fixture mock keeps the demo and
+ *   tests working with zero setup.
  *
- * Real providers should implement DraftProvider (generateDraft/rewrite/answer)
- * as a full pass: ingestion → chunking → embedding → retrieval → drafting →
- * citation extraction → confidence scoring, preserving the refusal contract
- * (no grounded source ⇒ draft: null + failureReason).
+ * Either way the route handlers depend only on the DraftProvider interface and
+ * the refusal contract (no grounded source ⇒ draft: null + failureReason).
  */
-function selectProvider(): DraftProvider {
-  const kind = process.env.AI_PROVIDER ?? "mock";
-  switch (kind) {
-    case "anthropic":
-    case "openai":
-      // TODO(real-provider): construct the LLM-backed provider here. Until one
-      // is wired, fall back to the mock rather than crashing the app, and warn.
-      console.warn(
-        `[ai] AI_PROVIDER="${kind}" requested but no real provider is wired yet; using the mock provider.`,
-      );
-      return mockDraftProvider;
-    case "mock":
-    default:
-      return mockDraftProvider;
-  }
+export function getDraftProvider(workspaceId: string): DraftProvider {
+  return hasDatabase() ? new RagDraftProvider(workspaceId) : mockDraftProvider;
 }
-
-/** The active provider used by route handlers. */
-export const draftProvider: DraftProvider = selectProvider();

@@ -102,6 +102,15 @@ export class PgRepository implements Repository {
       await this.db.insert(s.auditEvents).values(d.audit.map((a) => ({ ...a, id: uid("au"), workspaceId })));
     if (d.notifications.length)
       await this.db.insert(s.notifications).values(d.notifications.map((n, i) => ({ id: uid("nt"), workspaceId, color: n.c, text: n.text, time: n.time, sortOrder: i })));
+
+    // Embed the seed knowledge corpus so RAG retrieval is real from day one.
+    // Best-effort: a failure here must not block workspace creation.
+    try {
+      const { ingestSeedCorpus } = await import("@/server/ai/rag");
+      await ingestSeedCorpus(workspaceId);
+    } catch (err) {
+      console.error("[seed] corpus ingestion failed:", err);
+    }
   }
 
   /* sessions ------------------------------------------------------------- */

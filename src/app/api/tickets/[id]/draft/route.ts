@@ -1,6 +1,6 @@
 import { draftActionSchema } from "@/lib/schemas";
 import { ApiError, handleApi, parseBody, requireSession } from "@/server/api";
-import { draftProvider } from "@/server/ai";
+import { getDraftProvider } from "@/server/ai";
 import { runAutomations } from "@/server/automations/engine";
 import { repo, NotFoundError } from "@/server/repository";
 import { seedCustomers } from "@/data/workspace";
@@ -29,10 +29,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       r.getKbDocs(session.workspaceId),
       r.getCopilot(session.workspaceId),
     ]);
+    const provider = getDraftProvider(session.workspaceId);
     const result =
       body.action === "regenerate"
-        ? await draftProvider.regenerate(ticket, kbDocs, { threshold: copilot.threshold / 100 })
-        : await draftProvider.rewrite(ticket, body.tone);
+        ? await provider.regenerate(ticket, kbDocs, { threshold: copilot.threshold / 100 })
+        : await provider.rewrite(ticket, body.tone);
 
     if (!result.draft) {
       throw new ApiError(409, result.failureReason);
