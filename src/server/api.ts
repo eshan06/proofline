@@ -64,7 +64,10 @@ export function handleApi<T>(fn: () => Promise<T>): Promise<NextResponse> {
       if (err instanceof ApiError) {
         return NextResponse.json({ error: err.message }, { status: err.status });
       }
-      if (err instanceof NotFoundError) {
+      // Match by name as well as instanceof: the bundler can duplicate the
+      // repository module across alias/relative imports, giving NotFoundError
+      // two class identities, so a plain instanceof check is not reliable.
+      if (err instanceof NotFoundError || (err instanceof Error && err.name === "NotFoundError")) {
         return NextResponse.json({ error: err.message }, { status: 404 });
       }
       logger.error("api.unhandled", {

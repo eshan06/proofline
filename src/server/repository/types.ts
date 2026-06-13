@@ -31,7 +31,15 @@ export interface UserRecord {
   passwordHash: string | null;
 }
 
-export class NotFoundError extends Error {}
+export class NotFoundError extends Error {
+  constructor(message?: string) {
+    super(message);
+    // Set explicitly so it can be recognized by name even when bundling
+    // duplicates this module across alias (@/…) and relative (./…) imports,
+    // which would otherwise make `instanceof` unreliable.
+    this.name = "NotFoundError";
+  }
+}
 
 export type { WidgetTranscriptMessage } from "./web-ticket";
 import type { WidgetTranscriptMessage } from "./web-ticket";

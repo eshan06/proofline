@@ -20,6 +20,23 @@ export function hasDatabase(): boolean {
   return !!process.env.DATABASE_URL;
 }
 
+/**
+ * TLS policy for the connection. Local dev databases (Docker) speak plaintext;
+ * managed Postgres (AWS RDS, Supabase, Neon, …) requires TLS but presents a
+ * cert signed by a provider CA that isn't in Node's default trust store, so a
+ * naive `sslmode=require` still fails verification. We therefore encrypt
+ * without strict CA verification for remote hosts. `DB_SSL` overrides:
+ * `disable` (force off) or `verify` (strict — set `NODE_EXTRA_CA_CERTS` to the
+ * provider CA bundle). Hardening TODO: ship the RDS CA bundle and default to verify.
+ */
+export function sslConfig(url: string): false | { rejectUnauthorized: boolean } {
+  const mode = process.env.DB_SSL;
+  if (mode === "disable") return false;
+  if (mode === "verify") return { rejectUnauthorized: true };
+  const isLocal = /@(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)[:/]/.test(url);
+  return isLocal ? false : { rejectUnauthorized: false };
+}
+
 export function getDb(): Db {
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL is not set — the Postgres repository is unavailable.");
@@ -31,6 +48,7 @@ export function getDb(): Db {
       // Next.js bundles this for server use; disable prepared statements for
       // compatibility with poolers (PgBouncer/RDS Proxy) in production.
       prepare: false,
+      ssl: sslConfig(process.env.DATABASE_URL),
     });
     g.__plSql = sql;
     g.__plDb = drizzle(sql, { schema });
