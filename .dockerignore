@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.github
+design_handoff_proofline
+e2e
+coverage
+*.log
+.env*
+!.env.example
+README.md
+ARCHITECTURE.md
+PRODUCTION.md

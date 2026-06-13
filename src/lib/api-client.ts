@@ -78,4 +78,7 @@ export const api = {
     request("/api/auth/login", { method: "POST", body: JSON.stringify(body) }),
 
   logOut: () => request("/api/auth/logout", { method: "POST" }),
+
+  checkout: (plan: "growth" | "scale") =>
+    request<{ url: string }>("/api/billing/checkout", { method: "POST", body: JSON.stringify({ plan }) }),
 };

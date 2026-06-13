@@ -172,7 +172,20 @@ function BillingTab() {
           <span className="text-[11.5px] text-ink-4">$49 per seat / month · 3 seats · renews Jul 1, 2026</span>
         </div>
         <span className="font-mono text-[19px] font-semibold text-ink">$147<span className="text-[11px] text-muted">/mo</span></span>
-        <button type="button" onClick={() => toast("Plan upgrade flow")} className="rounded-[7px] border border-white/10 bg-white/5 px-[13px] py-1.5 text-[11.5px] font-medium text-ink-2 hover:border-accent/50 hover:text-accent-soft">Upgrade to Scale</button>
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              const { url } = await api.checkout("scale");
+              window.location.href = url;
+            } catch {
+              toast("Could not start checkout — try again");
+            }
+          }}
+          className="rounded-[7px] border border-white/10 bg-white/5 px-[13px] py-1.5 text-[11.5px] font-medium text-ink-2 hover:border-accent/50 hover:text-accent-soft"
+        >
+          Upgrade to Scale
+        </button>
       </div>
       <div className="grid grid-cols-4 gap-3">
         {USAGE.map((u) => (

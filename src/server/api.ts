@@ -3,6 +3,7 @@ import type { ZodSchema } from "zod";
 import { currentSession } from "@/server/session";
 import { NotFoundError, type SessionInfo } from "@/server/repository";
 import { logger } from "@/server/logger";
+import { clientKey, rateLimit, type RateLimit } from "@/server/rate-limit";
 
 /**
  * Small shared plumbing for route handlers: session guard, zod-validated
@@ -19,6 +20,15 @@ export async function requireSession(): Promise<SessionInfo> {
   const session = await currentSession();
   if (!session) throw new ApiError(401, "No active session — sign in or open the demo.");
   return session;
+}
+
+/** Throw 429 when the caller exceeds the named limit (keyed by client IP). */
+export function enforceRateLimit(req: Request, scope: string, limit: RateLimit): void {
+  const result = rateLimit(clientKey(req, scope), limit);
+  if (!result.allowed) {
+    logger.warn("rate_limited", { scope, retryAfterSec: result.retryAfterSec });
+    throw new ApiError(429, `Too many requests — try again in ${result.retryAfterSec}s.`);
+  }
 }
 
 export async function parseBody<T>(req: Request, schema: ZodSchema<T>): Promise<T> {

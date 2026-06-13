@@ -35,6 +35,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Lean container image: only the server + traced deps are copied (see Dockerfile).
+  output: "standalone",
   eslint: { dirs: ["src"] },
   poweredByHeader: false,
   async headers() {

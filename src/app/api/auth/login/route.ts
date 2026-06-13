@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { handleApi, parseBody, ApiError } from "@/server/api";
+import { handleApi, parseBody, ApiError, enforceRateLimit } from "@/server/api";
+import { LIMITS } from "@/server/rate-limit";
 import { repo } from "@/server/repository";
 import { verifyPassword } from "@/server/auth/password";
 import { startRegularSession } from "@/server/session";
@@ -11,6 +12,7 @@ const loginSchema = z.object({
 
 export async function POST(req: Request) {
   return handleApi(async () => {
+    enforceRateLimit(req, "login", LIMITS.auth);
     const body = await parseBody(req, loginSchema);
     const r = repo();
     const user = await r.findUserByEmail(body.email);

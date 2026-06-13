@@ -1,0 +1,39 @@
+# Local production-like stack: app + Postgres (with pgvector).
+#   docker compose up --build
+#   docker compose run --rm app npm run db:migrate   # first-time schema apply
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_PASSWORD: proofline
+      POSTGRES_DB: proofline
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d proofline"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://postgres:proofline@db:5432/proofline
+      # AI / email / billing default to dev transports; set provider + keys to go live.
+      AI_PROVIDER: mock
+      EMBEDDINGS_PROVIDER: local
+      LLM_PROVIDER: template
+      EMAIL_PROVIDER: console
+      BILLING_PROVIDER: mock
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
