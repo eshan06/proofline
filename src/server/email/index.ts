@@ -23,16 +23,42 @@ class ConsoleEmailProvider implements EmailProvider {
   }
 }
 
+/** Real transactional email via Resend's HTTP API (no SDK — a single fetch). */
+class ResendEmailProvider implements EmailProvider {
+  constructor(private apiKey: string, private from: string) {}
+  async send(msg: EmailMessage): Promise<void> {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { authorization: `Bearer ${this.apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({ from: this.from, to: [msg.to], subject: msg.subject, html: msg.html, text: msg.text }),
+    });
+    if (!res.ok) {
+      throw new Error(`Resend ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
+    }
+    logger.info("email.sent", { to: msg.to, subject: msg.subject, provider: "resend" });
+  }
+}
+
 let cached: EmailProvider | null = null;
 
 export function email(): EmailProvider {
   if (cached) return cached;
   const kind = process.env.EMAIL_PROVIDER ?? "console";
   switch (kind) {
-    case "resend":
+    case "resend": {
+      const key = process.env.RESEND_API_KEY;
+      const from = process.env.EMAIL_FROM;
+      if (!key || !from) {
+        logger.warn("email.resend_unconfigured", { reason: "missing RESEND_API_KEY / EMAIL_FROM" });
+        cached = new ConsoleEmailProvider();
+        return cached;
+      }
+      cached = new ResendEmailProvider(key, from);
+      return cached;
+    }
     case "postmark":
     case "ses":
-      // TODO(real-email): construct the API-backed transport here.
+      // TODO(real-email): Postmark/SES transports follow the same one-fetch shape.
       logger.warn("email.provider_unwired", { requested: kind });
       cached = new ConsoleEmailProvider();
       return cached;
@@ -40,6 +66,17 @@ export function email(): EmailProvider {
       cached = new ConsoleEmailProvider();
       return cached;
   }
+}
+
+/**
+ * Fire-and-forget send that REPORTS failures instead of swallowing them — use
+ * this for transactional emails (welcome, verification, reset, invite) so a
+ * real provider outage is alerted, not silently dropped.
+ */
+export function sendEmailSafe(msg: EmailMessage, context: string): void {
+  void email()
+    .send(msg)
+    .catch((err) => logger.reportError("email.send_failed", err, { to: msg.to, context }));
 }
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";

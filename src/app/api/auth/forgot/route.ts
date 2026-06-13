@@ -2,7 +2,7 @@ import { z } from "zod";
 import { handleApi, parseBody, enforceRateLimit } from "@/server/api";
 import { LIMITS } from "@/server/rate-limit";
 import { repo } from "@/server/repository";
-import { email, passwordResetEmail } from "@/server/email";
+import { sendEmailSafe, passwordResetEmail } from "@/server/email";
 
 const schema = z.object({ email: z.string().email() });
 
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     const user = await r.findUserByEmail(body.email);
     if (user) {
       const token = await r.createPasswordReset(user.id);
-      void email().send(passwordResetEmail(user.email, token)).catch(() => {});
+      sendEmailSafe(passwordResetEmail(user.email, token), "password_reset");
     }
     return { ok: true };
   });

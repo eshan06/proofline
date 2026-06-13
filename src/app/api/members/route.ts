@@ -1,7 +1,7 @@
 import { inviteMemberSchema } from "@/lib/schemas";
 import { actorName, ApiError, handleApi, parseBody, requireSession } from "@/server/api";
 import { repo } from "@/server/repository";
-import { email, inviteEmail } from "@/server/email";
+import { sendEmailSafe, inviteEmail } from "@/server/email";
 import { planSeatLimit } from "@/server/billing/plans";
 
 export async function POST(req: Request) {
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
       action: `Invited ${body.email} as ${body.role}`,
       type: "Team",
     });
-    void email().send(inviteEmail(body.email, ws.name, body.role)).catch(() => {});
+    sendEmailSafe(inviteEmail(body.email, ws.name, body.role), "invite");
     return member;
   });
 }
