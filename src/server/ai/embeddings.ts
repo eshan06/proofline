@@ -58,17 +58,52 @@ function hash(s: string): number {
   return Math.abs(h);
 }
 
+/**
+ * Real semantic embeddings via OpenAI (text-embedding-3-small). Crucially it
+ * requests `dimensions: EMBEDDING_DIM`, so the returned vectors fit the existing
+ * pgvector column — switching providers needs a KB re-index (the lexical and
+ * semantic vector spaces differ) but NOT a schema/dimension migration. Errors
+ * throw rather than silently falling back to lexical vectors, which would mix
+ * vector spaces and quietly wreck retrieval.
+ */
+export class OpenAIEmbedder implements EmbeddingProvider {
+  readonly dim = EMBEDDING_DIM;
+  constructor(private apiKey: string, private model: string = process.env.EMBEDDINGS_MODEL || "text-embedding-3-small") {}
+
+  async embed(texts: string[]): Promise<number[][]> {
+    if (!texts.length) return [];
+    const res = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: { authorization: `Bearer ${this.apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({ model: this.model, input: texts, dimensions: this.dim }),
+    });
+    if (!res.ok) {
+      throw new Error(`OpenAI embeddings ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
+    }
+    const data = (await res.json()) as { data: { embedding: number[] }[] };
+    return data.data.map((d) => d.embedding);
+  }
+}
+
 let cached: EmbeddingProvider | null = null;
 
 export function embedder(): EmbeddingProvider {
   if (cached) return cached;
   const kind = process.env.EMBEDDINGS_PROVIDER ?? "local";
   switch (kind) {
-    case "openai":
+    case "openai": {
+      const key = process.env.OPENAI_API_KEY;
+      if (!key) {
+        console.warn("[embeddings] EMBEDDINGS_PROVIDER=openai but OPENAI_API_KEY missing; using LocalEmbedder.");
+        cached = new LocalEmbedder();
+        return cached;
+      }
+      cached = new OpenAIEmbedder(key);
+      return cached;
+    }
     case "voyage":
-      // TODO(real-embeddings): construct the API-backed embedder here (must
-      // produce EMBEDDING_DIM-length vectors or the column dimension changes).
-      console.warn(`[embeddings] EMBEDDINGS_PROVIDER="${kind}" not wired yet; using LocalEmbedder.`);
+      // TODO(voyage): same one-fetch shape against the Voyage embeddings API.
+      console.warn(`[embeddings] EMBEDDINGS_PROVIDER="voyage" not wired yet; using LocalEmbedder.`);
       cached = new LocalEmbedder();
       return cached;
     default:

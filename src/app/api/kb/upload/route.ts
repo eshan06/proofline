@@ -110,8 +110,26 @@ async function extractText(file: File, name: string): Promise<string> {
       .replace(/\s+/g, " ")
       .trim();
   }
+  if (type === "application/pdf" || /\.pdf$/i.test(name)) {
+    try {
+      // Lazy-load the parser so it never bloats the main server bundle.
+      const { PDFParse } = await import("pdf-parse");
+      const parser = new PDFParse({ data: new Uint8Array(await file.arrayBuffer()) });
+      return (await parser.getText()).text;
+    } catch {
+      throw new ApiError(422, "Couldn't extract text from that PDF — it may be scanned (image-only) or corrupt.");
+    }
+  }
+  if (type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || /\.docx$/i.test(name)) {
+    try {
+      const mammoth = await import("mammoth");
+      return (await mammoth.extractRawText({ buffer: Buffer.from(await file.arrayBuffer()) })).value;
+    } catch {
+      throw new ApiError(422, "Couldn't read that Word document.");
+    }
+  }
   throw new ApiError(
     415,
-    "PDF and Word parsing needs the document-parser add-on. Upload a .txt, .md, .csv, .json, or .html file (or paste the text) for now.",
+    "Unsupported file type. Upload a .txt, .md, .csv, .json, .html, .pdf, or .docx file (legacy .doc isn't supported).",
   );
 }

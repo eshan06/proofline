@@ -109,7 +109,7 @@ export function KbView() {
           <input
             ref={fileRef}
             type="file"
-            accept=".txt,.text,.md,.markdown,.csv,.tsv,.json,.log,.rst,.html,.htm,.xml,text/*,application/json"
+            accept=".txt,.text,.md,.markdown,.csv,.tsv,.json,.log,.rst,.html,.htm,.xml,.pdf,.docx,text/*,application/json,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             className="hidden"
             onChange={onFilePicked}
           />
