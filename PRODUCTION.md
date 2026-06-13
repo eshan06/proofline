@@ -66,7 +66,7 @@ Legend: ✅ done & tested · 🔌 built, needs your credentials to go live · �
 - Structured JSON logging, `/api/health` (liveness) + `/api/health/ready`
   (readiness — pings Postgres in DB mode), GitHub Actions CI (typecheck/lint/test/build + e2e).
 - Dockerfile (standalone, non-root, healthcheck) + docker-compose (app + pgvector).
-- 58 unit tests + 7 E2E.
+- 63 unit tests + 7 E2E.
 
 ### Identity & data integrity ✅
 - The **real signed-in user** drives the app shell (sidebar, topbar, home greeting)
@@ -81,26 +81,27 @@ Legend: ✅ done & tested · 🔌 built, needs your credentials to go live · �
 
 ## 🔌 Needs your accounts / keys (interfaces ready; flip an env var + wire the branch)
 
-| Capability | Env | What you provide | Where to wire |
+| Capability | Env | What you provide | Status |
 |---|---|---|---|
-| **Database** | `DATABASE_URL` | An AWS RDS Postgres (with pgvector) URL | already consumed — just set it + run `db:migrate` |
-| **LLM drafting** | `LLM_PROVIDER=anthropic\|openai` + key | Anthropic/OpenAI key | `src/server/ai/llm.ts` (marked TODO) |
-| **Embeddings** | `EMBEDDINGS_PROVIDER=openai\|voyage` + key | Embedding API key | `src/server/ai/embeddings.ts` (marked TODO) |
-| **Email** | `EMAIL_PROVIDER=resend\|postmark\|ses` + key | Transactional email provider | `src/server/email/index.ts` (marked TODO) |
-| **Billing** | `BILLING_PROVIDER=stripe` + keys | Stripe secret + webhook secret + price IDs | `src/server/billing/index.ts` + `/api/billing/webhook` (marked TODO) |
-| **App URL** | `NEXT_PUBLIC_APP_URL` | Your domain | already consumed |
+| **Database** | `DATABASE_URL` | AWS RDS Postgres (pgvector) URL | ✅ wired (TLS auto) — set it + run `db:migrate` |
+| **LLM drafting** | `LLM_PROVIDER=openai` + `OPENAI_API_KEY` | OpenAI key | ✅ wired (gpt-4o-mini, graceful fallback). `anthropic` is the remaining branch |
+| **Embeddings** | `EMBEDDINGS_PROVIDER=openai` + `OPENAI_API_KEY` | OpenAI key | ✅ wired (text-embedding-3-small @ EMBEDDING_DIM) — re-index after switching. `voyage` TODO |
+| **Email** | `EMAIL_PROVIDER=resend` + `RESEND_API_KEY` + `EMAIL_FROM` | Resend key + sender | ✅ wired (Postmark/SES are stubs) |
+| **Billing** | `BILLING_PROVIDER=stripe` + secret/webhook secret/price ids | Stripe account | ✅ wired — signature-verified webhook + plan/seat gating |
+| **App URL** | `NEXT_PUBLIC_APP_URL` | Your domain | ✅ consumed |
+| **Error alerts** (opt) | `ERROR_WEBHOOK_URL` | Slack/Discord webhook | ✅ wired (logs always; alerts when set) |
 
-Each TODO branch currently falls back to a working dev transport, so nothing
-crashes if a key is missing — it just runs in mock/local mode.
+Every provider falls back to a working keyless transport (mock/console/local/template),
+so nothing crashes without a key — set the env var to go live.
 
 ---
 
 ## ⛏️ Remaining engineering
 
 **Auth & accounts**
-- OAuth (Google) and SAML SSO/SCIM for the Scale tier.
-- Password-reset delivery (template + token table exist; wire the email send + `/reset` page).
-- Email verification on signup.
+- ✅ Password reset (/forgot + /reset + tokens) and email verification — shipped.
+- ✅ CSRF defense, per-account login throttle, timing-constant login — shipped.
+- OAuth (Google) and SAML SSO/SCIM for the Scale tier — remaining.
 
 **Channels (the actual ingestion)**
 - ✅ Website chat widget (embed → message → ticket → reply back) — shipped, see above.
@@ -110,32 +111,33 @@ crashes if a key is missing — it just runs in mock/local mode.
   outbound delivery on approve is the remaining piece.
 
 **RAG quality & scale**
-- ✅ Real KB file upload + ingestion for text formats (.txt/.md/.csv/.json/.html →
-  chunk → embed → pgvector). PDF/Docx need a document-parser add-on (pdf-parse/mammoth)
-  — currently surfaced as a clear 415.
-- Wire a real embedding model (local hashed vectors are dev-only) and re-index.
+- ✅ Real KB upload + ingestion for text/Markdown/CSV/JSON/HTML **and PDF/DOCX**
+  (pdf-parse/mammoth) → chunk → embed → pgvector.
+- ✅ Real semantic embeddings (`EMBEDDINGS_PROVIDER=openai`, text-embedding-3-small);
+  local hashed vectors remain the free default. Re-index when switching.
 - Background ingestion jobs (incremental re-sync) and a job queue (pg-boss/BullMQ)
-  instead of synchronous ingestion on the request path.
-- Re-ranking and evaluation harness for retrieval quality.
+  instead of synchronous ingestion on the request path — remaining.
+- Re-ranking and evaluation harness for retrieval quality — remaining.
 
 **Billing**
-- Stripe products/prices, seat-based metering, plan gating (enforce plan limits),
-  customer portal, dunning. Webhook handler skeleton is in place.
+- ✅ Real Stripe provider: signature-verified webhook, checkout, persisted
+  subscription, and seat-limit gating (Free 2 / Growth 10 / Scale 50).
+- Customer portal, dunning, proration, usage-based metering — remaining.
 
 **Compliance & legal**
+- ✅ GDPR/CCPA data-export + account/workspace deletion endpoints.
+- ✅ Audit log records invites + integration changes (extend to role changes,
+  draft approvals, logins).
 - Replace the templated Privacy/Terms/Security pages with counsel-reviewed copy.
-- DPA + sub-processor list; GDPR/CCPA data-export & deletion endpoints.
-- SOC 2 program for enterprise deals.
-- Audit log: ✅ now records invites + integration changes; extend to role changes,
-  draft approvals, logins, and add an export.
+- DPA + sub-processor list; SOC 2 program for enterprise deals — remaining.
 
 **Ops**
+- ✅ Graceful shutdown (SIGTERM drains the pool), `/api/health/ready` readiness
+  probe, error reporting seam (`logger.reportError` → `ERROR_WEBHOOK_URL`).
 - Managed Postgres (RDS) with backups/PITR + read replica; Redis for rate limits
   and sessions across instances (the in-process token-bucket store is correct for a
-  single instance but multiplies limits per replica).
-- Error reporting (Sentry) wired to the existing logger seam; metrics + alerting; uptime/status automation.
-- Graceful shutdown (SIGTERM drain + pool close). Readiness probe ✅ (`/api/health/ready`).
-- Load testing; autoscaling; CDN for static assets.
+  single instance but multiplies limits per replica) — remaining.
+- Full Sentry/OTel metrics + alerting; load testing; autoscaling; CDN — remaining.
 
 **Product polish**
 - ✅ Real signed-in user in the app shell (name/email/initials/role) + real reply authorship.
@@ -150,12 +152,13 @@ crashes if a key is missing — it just runs in mock/local mode.
 
 The thin vertical slice that turns this into a sellable product, in order:
 
-1. **Provision Postgres (RDS) + set `DATABASE_URL`** → real persistence/auth/RAG live.
-2. **Wire one LLM + embedding provider** → genuinely useful drafts.
-3. **One real channel** (Gmail or website chat) end-to-end, including outbound send.
-4. **Stripe** (products, checkout, webhooks, plan gating).
-5. **Legal + email verification + password reset** → safe to open signups.
-6. Harden: Sentry, Redis, backups, SSO.
+1. ✅ **Postgres (RDS) + `DATABASE_URL`** — live (TLS auto, migrations applied).
+2. ✅ **LLM + embeddings** (`LLM_PROVIDER=openai`, optionally `EMBEDDINGS_PROVIDER=openai`).
+3. ✅ **One real channel** — website chat widget, end-to-end (inbound + outbound).
+4. ✅ **Stripe** — signature-verified webhook + plan/seat gating (set keys + price ids to charge).
+5. ✅ **Email verification + password reset** — shipped (set `EMAIL_PROVIDER=resend` to deliver).
+6. **Remaining to harden**: Redis (multi-instance limits/sessions), full Sentry/metrics,
+   RDS backups/PITR, Gmail/Slack channels, OAuth/SSO, counsel-reviewed legal copy.
 
 Everything in steps 1–4 is already scaffolded with interfaces and tests; the work
 is filling the marked TODO branches and connecting your accounts.
