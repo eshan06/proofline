@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { ZodSchema } from "zod";
 import { currentSession } from "@/server/session";
-import { NotFoundError, type SessionRecord } from "@/server/store";
+import { NotFoundError, type SessionInfo } from "@/server/repository";
 import { logger } from "@/server/logger";
 
 /**
@@ -15,7 +15,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function requireSession(): Promise<SessionRecord> {
+export async function requireSession(): Promise<SessionInfo> {
   const session = await currentSession();
   if (!session) throw new ApiError(401, "No active session — sign in or open the demo.");
   return session;
@@ -54,6 +54,6 @@ export function handleApi<T>(fn: () => Promise<T>): Promise<NextResponse> {
 }
 
 /** Product analytics — flows through the structured logger; seam for a real pipeline. */
-export function trackEvent(session: SessionRecord, name: string, props?: Record<string, unknown>) {
+export function trackEvent(session: SessionInfo, name: string, props?: Record<string, unknown>) {
   logger.event(name, { session: session.id.slice(0, 12), sessionType: session.type, ...props });
 }

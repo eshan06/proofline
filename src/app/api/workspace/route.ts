@@ -1,9 +1,10 @@
 import { handleApi, requireSession } from "@/server/api";
-import { workspacePayload } from "@/server/store";
+import { repo } from "@/server/repository";
 
 export async function GET() {
   return handleApi(async () => {
     const session = await requireSession();
-    return workspacePayload(session);
+    const ws = await repo().getWorkspace(session.workspaceId);
+    return { ...ws, demo: { active: session.type === "demo", steps: session.demoSteps } };
   });
 }

@@ -1,29 +1,44 @@
 import { cookies } from "next/headers";
-import { createSession, getSession, type SessionRecord } from "@/server/store";
+import { repo, type SessionInfo } from "@/server/repository";
 
 export const SESSION_COOKIE = "pl_session";
 
+const cookieOpts = (type: "regular" | "demo") => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  path: "/",
+  maxAge: type === "demo" ? 60 * 30 : 60 * 60 * 12,
+});
+
 /** Read the current session (RSC / route handlers). Null when signed out. */
-export async function currentSession(): Promise<SessionRecord | null> {
+export async function currentSession(): Promise<SessionInfo | null> {
   const jar = await cookies();
-  return getSession(jar.get(SESSION_COOKIE)?.value);
+  const id = jar.get(SESSION_COOKIE)?.value;
+  if (!id) return null;
+  return repo().getSession(id);
 }
 
-/** Create a session and persist the cookie (route handlers / server actions only). */
-export async function startSession(type: "regular" | "demo"): Promise<SessionRecord> {
-  const record = createSession(type);
+/** Establish a regular session for a signed-in user. */
+export async function startRegularSession(userId: string, workspaceId: string): Promise<SessionInfo> {
+  const session = await repo().createSession({ type: "regular", userId, workspaceId });
   const jar = await cookies();
-  jar.set(SESSION_COOKIE, record.id, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: type === "demo" ? 60 * 30 : 60 * 60 * 12,
-  });
-  return record;
+  jar.set(SESSION_COOKIE, session.id, cookieOpts("regular"));
+  return session;
+}
+
+/** Mint an unauthenticated demo sandbox session over a fresh seeded workspace. */
+export async function startDemoSession(): Promise<SessionInfo> {
+  const workspaceId = await repo().createDemoWorkspace();
+  const session = await repo().createSession({ type: "demo", workspaceId });
+  const jar = await cookies();
+  jar.set(SESSION_COOKIE, session.id, cookieOpts("demo"));
+  return session;
 }
 
 export async function endSession(): Promise<void> {
   const jar = await cookies();
+  const id = jar.get(SESSION_COOKIE)?.value;
+  if (id) await repo().deleteSession(id);
   jar.delete(SESSION_COOKIE);
 }

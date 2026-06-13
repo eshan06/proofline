@@ -1,17 +1,17 @@
 import { handleApi, requireSession, trackEvent } from "@/server/api";
 import { MOCK_LATENCY } from "@/server/ai/provider";
-import { addKbDoc, completeDemoStep, getSession, updateKbDoc } from "@/server/store";
+import { repo } from "@/server/repository";
 
 /**
  * Mock upload: a new document lands in "processing" immediately and flips to
- * "indexed · 26 chunks" after the indexing latency (2.2s), matching the
- * design's KB upload flow. The flip happens server-side; the client polls via
- * its workspace query refetch.
+ * "indexed · 26 chunks" after the indexing latency (2.2s). The flip happens
+ * server-side (workspace-scoped); the client polls via its workspace refetch.
  */
 export async function POST() {
   return handleApi(async () => {
     const session = await requireSession();
-    const doc = addKbDoc(session, {
+    const r = repo();
+    const doc = await r.addKbDoc(session.workspaceId, {
       name: "Refund-policy-v3.pdf",
       source: "Upload",
       status: "processing",
@@ -20,20 +20,14 @@ export async function POST() {
       synced: "just now",
     });
 
-    if (completeDemoStep(session, "upload")) {
+    if (await r.completeDemoStep(session.id, "upload")) {
       trackEvent(session, "demo_step_completed", { step: "upload" });
     }
 
-    const sessionId = session.id;
+    const { workspaceId } = session;
     const docId = doc.id;
     setTimeout(() => {
-      const live = getSession(sessionId);
-      if (!live) return;
-      try {
-        updateKbDoc(live, docId, { status: "indexed", chunks: "26" });
-      } catch {
-        /* session reseeded mid-flight — nothing to update */
-      }
+      void r.updateKbDoc(workspaceId, docId, { status: "indexed", chunks: "26" }).catch(() => {});
     }, MOCK_LATENCY.kbIndexing);
 
     return doc;

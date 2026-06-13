@@ -3,21 +3,28 @@ import { NextResponse, type NextRequest } from "next/server";
 export const SESSION_COOKIE = "pl_session";
 
 /**
- * Ensure every app request carries a workspace session cookie.
+ * Gate app routes on a session cookie. Cookies can't be written from a Server
+ * Component, so anonymous sessions are minted here. Middleware runs on the edge
+ * and can't touch the repository — it only inspects cookie presence; the RSC /
+ * route handlers validate the session against the store.
  *
- * Cookies can't be written from a Server Component, so the session is minted
- * here instead. Middleware runs in the edge runtime and can't touch the Node
- * in-memory store — it only generates the id; the store lazily seeds a
- * workspace the first time that id is read in the Node runtime (see
- * store.getSession). /demo mints its own clearly-separate sandbox session in a
- * route handler, so we never overwrite an existing cookie.
+ * - With a database (DATABASE_URL set): app routes require real auth. No
+ *   cookie ⇒ redirect to /signin. /demo still mints a sandbox session.
+ * - Without a database: mint an anonymous `ws_` cookie; the in-memory repo
+ *   lazily seeds its workspace (zero-setup dev / demo).
  */
 export function middleware(req: NextRequest) {
   if (req.cookies.has(SESSION_COOKIE)) return NextResponse.next();
 
+  if (process.env.DATABASE_URL) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/signin";
+    url.searchParams.set("next", req.nextUrl.pathname);
+    return NextResponse.redirect(url);
+  }
+
   const id = `ws_s_${crypto.randomUUID().replace(/-/g, "")}`;
   const res = NextResponse.next();
-  // Make it visible to this same request's RSC render *and* persist it.
   req.cookies.set(SESSION_COOKIE, id);
   res.cookies.set(SESSION_COOKIE, id, {
     httpOnly: true,
@@ -30,7 +37,6 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // App surfaces that need a session. Static assets and the marketing root opt out.
   matcher: [
     "/home/:path*",
     "/inbox/:path*",

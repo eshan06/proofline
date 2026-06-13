@@ -71,6 +71,11 @@ export const api = {
   trackEvent: (name: string, props?: Record<string, unknown>) =>
     request("/api/events", { method: "POST", body: JSON.stringify({ name, props }) }),
 
-  signIn: (email: string) =>
-    request("/api/session", { method: "POST", body: JSON.stringify({ email }) }),
+  signUp: (body: { name: string; email: string; password: string }) =>
+    request("/api/auth/signup", { method: "POST", body: JSON.stringify(body) }),
+
+  logIn: (body: { email: string; password: string }) =>
+    request("/api/auth/login", { method: "POST", body: JSON.stringify(body) }),
+
+  logOut: () => request("/api/auth/logout", { method: "POST" }),
 };

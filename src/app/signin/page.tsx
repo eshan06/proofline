@@ -1,18 +1,25 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/shell/logo";
 import { api, ApiClientError } from "@/lib/api-client";
 
 /**
- * Minimal real sign-in — deliberately separate from the demo sandbox. Creates
- * a regular workspace session and lands on the home dashboard.
+ * Real email + password auth, separate from the demo sandbox. Toggles between
+ * sign-in and create-account; on success it lands on the requested page (or the
+ * home dashboard). With a database this is the only way into the app.
  */
-export default function SignInPage() {
+function SignInInner() {
   const router = useRouter();
-  const [email, setEmail] = useState("eshan@acme.io");
+  const params = useSearchParams();
+  const next = params.get("next") || "/home";
+
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -21,10 +28,14 @@ export default function SignInPage() {
     setBusy(true);
     setError(null);
     try {
-      await api.signIn(email);
-      router.push("/home");
+      if (mode === "signup") {
+        await api.signUp({ name, email, password });
+      } else {
+        await api.logIn({ email, password });
+      }
+      router.push(next);
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "Could not sign in");
+      setError(err instanceof ApiClientError ? err.message : "Something went wrong");
       setBusy(false);
     }
   }
@@ -38,11 +49,27 @@ export default function SignInPage() {
         </Link>
 
         <div className="flex flex-col gap-1.5">
-          <h1 className="text-[21px] font-semibold tracking-[-0.02em] text-ink">Welcome back</h1>
-          <p className="text-[13px] text-ink-4">Sign in to your Acme Inc workspace.</p>
+          <h1 className="text-[21px] font-semibold tracking-[-0.02em] text-ink">
+            {mode === "login" ? "Welcome back" : "Create your workspace"}
+          </h1>
+          <p className="text-[13px] text-ink-4">
+            {mode === "login" ? "Sign in to your Proofline workspace." : "Start with a fully-loaded workspace to explore."}
+          </p>
         </div>
 
         <form onSubmit={submit} className="flex flex-col gap-3">
+          {mode === "signup" ? (
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[11px] font-semibold text-ink-4">Name</span>
+              <input
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="pl-focus rounded-[7px] border border-white/9 bg-white/[0.035] px-3 py-2 text-[13px] text-ink"
+                placeholder="Jane Doe"
+              />
+            </label>
+          ) : null}
           <label className="flex flex-col gap-1.5">
             <span className="text-[11px] font-semibold text-ink-4">Work email</span>
             <input
@@ -54,6 +81,18 @@ export default function SignInPage() {
               placeholder="you@company.com"
             />
           </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-semibold text-ink-4">Password</span>
+            <input
+              type="password"
+              required
+              minLength={mode === "signup" ? 8 : undefined}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="pl-focus rounded-[7px] border border-white/9 bg-white/[0.035] px-3 py-2 text-[13px] text-ink"
+              placeholder={mode === "signup" ? "At least 8 characters" : "••••••••"}
+            />
+          </label>
           {error ? <span className="text-[11.5px] text-danger">{error}</span> : null}
           <button
             type="submit"
@@ -61,17 +100,31 @@ export default function SignInPage() {
             className="rounded-[8px] bg-accent py-[9px] text-[13px] font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
             style={{ boxShadow: "0 2px 12px rgba(77,124,254,0.3)" }}
           >
-            {busy ? "Signing in…" : "Sign in"}
+            {busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
           </button>
         </form>
 
-        <div className="flex items-center gap-2 text-[12px] text-muted">
-          <span>Just exploring?</span>
+        <div className="flex items-center justify-between text-[12px] text-muted">
+          <button
+            type="button"
+            onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(null); }}
+            className="border-0 bg-transparent text-ink-4 hover:text-ink"
+          >
+            {mode === "login" ? "Create an account" : "I already have an account"}
+          </button>
           <Link href="/demo" className="font-medium text-accent no-underline hover:text-accent-hover">
             Try the demo →
           </Link>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-page-landing" />}>
+      <SignInInner />
+    </Suspense>
   );
 }
