@@ -277,6 +277,7 @@ export const currentUserSchema = z.object({
   email: z.string(),
   initials: z.string(),
   role: memberRoleSchema.nullable(),
+  emailVerified: z.boolean(),
 });
 export type CurrentUser = z.infer<typeof currentUserSchema>;
 

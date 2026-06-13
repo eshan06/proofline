@@ -28,3 +28,6 @@ yarn-error.log*
 
 # test
 /coverage
+
+# sandbox-only migration helper (db:migrate needs node TS-strip this build lacks)
+_tmp_*

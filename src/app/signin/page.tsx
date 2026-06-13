@@ -93,6 +93,11 @@ function SignInInner() {
               placeholder={mode === "signup" ? "At least 8 characters" : "••••••••"}
             />
           </label>
+          {mode === "login" ? (
+            <Link href="/forgot" className="-mt-1 self-end text-[11.5px] text-ink-4 no-underline hover:text-accent-soft">
+              Forgot password?
+            </Link>
+          ) : null}
           {error ? <span className="text-[11.5px] text-danger">{error}</span> : null}
           <button
             type="submit"

@@ -25,6 +25,7 @@ export function AppShell({
   const { data: ws } = useWorkspace(initialWorkspace);
   const workspace = ws ?? initialWorkspace;
   const isDemo = workspace.demo.active;
+  const needsVerify = !isDemo && workspace.currentUser && !workspace.currentUser.emailVerified;
 
   return (
     <div
@@ -32,6 +33,11 @@ export function AppShell({
       style={{ minWidth: 1240 }}
     >
       {isDemo ? <DemoBanner demo={workspace.demo} /> : null}
+      {needsVerify ? (
+        <div className="flex h-8 shrink-0 items-center justify-center gap-2 bg-warning/12 text-[12px] text-warning">
+          <span>📬 Verify your email — we sent a confirmation link to {workspace.currentUser!.email}.</span>
+        </div>
+      ) : null}
 
       <div className="flex min-h-0 flex-1">
         <Sidebar workspaceName={workspace.name} currentUser={workspace.currentUser} />

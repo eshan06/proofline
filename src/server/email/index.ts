@@ -74,6 +74,16 @@ export function passwordResetEmail(to: string, token: string): EmailMessage {
   };
 }
 
+export function verifyEmail(to: string, token: string): EmailMessage {
+  const link = `${APP_URL}/api/auth/verify?token=${encodeURIComponent(token)}`;
+  return {
+    to,
+    subject: "Verify your email for Proofline",
+    text: `Confirm your email to finish setting up Proofline: ${link} (valid for 24 hours)`,
+    html: `<p>Confirm your email to finish setting up Proofline (valid for 24 hours):</p><p><a href="${link}">Verify email</a></p><p>If you didn't create this account, you can ignore this email.</p>`,
+  };
+}
+
 function escape(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 }

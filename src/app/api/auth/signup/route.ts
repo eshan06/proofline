@@ -4,7 +4,7 @@ import { LIMITS } from "@/server/rate-limit";
 import { repo } from "@/server/repository";
 import { hashPassword } from "@/server/auth/password";
 import { startRegularSession } from "@/server/session";
-import { email, welcomeEmail } from "@/server/email";
+import { email, welcomeEmail, verifyEmail } from "@/server/email";
 
 const signupSchema = z.object({
   name: z.string().min(1).max(80),
@@ -28,6 +28,10 @@ export async function POST(req: Request) {
     });
     await startRegularSession(user.id, workspaceId);
     void email().send(welcomeEmail(user.email, user.name)).catch(() => {});
+    // Fire off an email-verification link (soft gate — the account works
+    // immediately; the shell nudges until verified).
+    const verifyToken = await r.createEmailVerification(user.id);
+    void email().send(verifyEmail(user.email, verifyToken)).catch(() => {});
     return { ok: true, user: { id: user.id, email: user.email, name: user.name } };
   });
 }

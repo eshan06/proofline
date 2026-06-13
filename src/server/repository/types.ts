@@ -29,6 +29,7 @@ export interface UserRecord {
   email: string;
   name: string;
   passwordHash: string | null;
+  emailVerified?: boolean;
 }
 
 export class NotFoundError extends Error {
@@ -73,6 +74,17 @@ export interface Repository {
   findUserByEmail(email: string): Promise<UserRecord | null>;
   getUser(userId: string): Promise<UserRecord | null>;
   membershipRole(userId: string, workspaceId: string): Promise<MemberRole | null>;
+
+  /* account lifecycle: password reset + email verification */
+  createPasswordReset(userId: string): Promise<string>;
+  /** Consume a reset token (one-time): returns the userId, or null if invalid/expired. */
+  consumePasswordReset(token: string): Promise<string | null>;
+  setPassword(userId: string, passwordHash: string): Promise<void>;
+  /** Invalidate all of a user's sessions (e.g. after a password reset). */
+  deleteUserSessions(userId: string): Promise<void>;
+  createEmailVerification(userId: string): Promise<string>;
+  consumeEmailVerification(token: string): Promise<string | null>;
+  markEmailVerified(userId: string): Promise<void>;
   /** The user's primary (first) workspace id, or null if they have none. */
   primaryWorkspaceForUser(userId: string): Promise<string | null>;
   /** A fully-seeded throwaway workspace for an unauthenticated demo session. */

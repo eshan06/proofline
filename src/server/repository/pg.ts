@@ -207,12 +207,44 @@ export class PgRepository implements Repository {
 
   async findUserByEmail(email: string): Promise<UserRecord | null> {
     const [row] = await this.db.select().from(s.users).where(eq(s.users.email, email.toLowerCase())).limit(1);
-    return row ? { id: row.id, email: row.email, name: row.name, passwordHash: row.passwordHash } : null;
+    return row ? { id: row.id, email: row.email, name: row.name, passwordHash: row.passwordHash, emailVerified: row.emailVerified } : null;
   }
 
   async getUser(userId: string): Promise<UserRecord | null> {
     const [row] = await this.db.select().from(s.users).where(eq(s.users.id, userId)).limit(1);
-    return row ? { id: row.id, email: row.email, name: row.name, passwordHash: row.passwordHash } : null;
+    return row ? { id: row.id, email: row.email, name: row.name, passwordHash: row.passwordHash, emailVerified: row.emailVerified } : null;
+  }
+
+  async createPasswordReset(userId: string): Promise<string> {
+    const token = secureToken(24);
+    await this.db.insert(s.passwordResets).values({ token, userId, expiresAt: new Date(Date.now() + 60 * 60 * 1000) });
+    return token;
+  }
+  async consumePasswordReset(token: string): Promise<string | null> {
+    const [row] = await this.db.select().from(s.passwordResets).where(eq(s.passwordResets.token, token)).limit(1);
+    if (!row) return null;
+    await this.db.delete(s.passwordResets).where(eq(s.passwordResets.token, token));
+    return row.expiresAt.getTime() < Date.now() ? null : row.userId;
+  }
+  async setPassword(userId: string, passwordHash: string): Promise<void> {
+    await this.db.update(s.users).set({ passwordHash }).where(eq(s.users.id, userId));
+  }
+  async deleteUserSessions(userId: string): Promise<void> {
+    await this.db.delete(s.sessions).where(eq(s.sessions.userId, userId));
+  }
+  async createEmailVerification(userId: string): Promise<string> {
+    const token = secureToken(24);
+    await this.db.insert(s.emailVerifications).values({ token, userId, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) });
+    return token;
+  }
+  async consumeEmailVerification(token: string): Promise<string | null> {
+    const [row] = await this.db.select().from(s.emailVerifications).where(eq(s.emailVerifications.token, token)).limit(1);
+    if (!row) return null;
+    await this.db.delete(s.emailVerifications).where(eq(s.emailVerifications.token, token));
+    return row.expiresAt.getTime() < Date.now() ? null : row.userId;
+  }
+  async markEmailVerified(userId: string): Promise<void> {
+    await this.db.update(s.users).set({ emailVerified: true }).where(eq(s.users.id, userId));
   }
 
   async membershipRole(userId: string, workspaceId: string): Promise<MemberRole | null> {

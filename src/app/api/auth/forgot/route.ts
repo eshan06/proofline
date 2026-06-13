@@ -1,0 +1,26 @@
+import { z } from "zod";
+import { handleApi, parseBody, enforceRateLimit } from "@/server/api";
+import { LIMITS } from "@/server/rate-limit";
+import { repo } from "@/server/repository";
+import { email, passwordResetEmail } from "@/server/email";
+
+const schema = z.object({ email: z.string().email() });
+
+/**
+ * Request a password reset. Always returns 200 regardless of whether the email
+ * is registered — never reveal account existence. A real reset link is emailed
+ * only when the account exists.
+ */
+export async function POST(req: Request) {
+  return handleApi(async () => {
+    enforceRateLimit(req, "forgot", LIMITS.auth);
+    const body = await parseBody(req, schema);
+    const r = repo();
+    const user = await r.findUserByEmail(body.email);
+    if (user) {
+      const token = await r.createPasswordReset(user.id);
+      void email().send(passwordResetEmail(user.email, token)).catch(() => {});
+    }
+    return { ok: true };
+  });
+}

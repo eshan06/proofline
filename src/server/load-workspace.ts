@@ -22,7 +22,13 @@ export async function resolveCurrentUser(session: SessionInfo): Promise<CurrentU
   const user = await repo().getUser(session.userId);
   if (!user) return null;
   const role = await repo().membershipRole(session.userId, session.workspaceId);
-  return { name: user.name, email: user.email, initials: initialsOf(user.name, user.email), role };
+  return {
+    name: user.name,
+    email: user.email,
+    initials: initialsOf(user.name, user.email),
+    role,
+    emailVerified: user.emailVerified ?? false,
+  };
 }
 
 /**

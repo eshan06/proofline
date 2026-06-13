@@ -90,6 +90,12 @@ export const api = {
 
   logOut: () => request("/api/auth/logout", { method: "POST" }),
 
+  forgotPassword: (email: string) =>
+    request("/api/auth/forgot", { method: "POST", body: JSON.stringify({ email }) }),
+
+  resetPassword: (body: { token: string; password: string }) =>
+    request("/api/auth/reset", { method: "POST", body: JSON.stringify(body) }),
+
   checkout: (plan: "growth" | "scale") =>
     request<{ url: string }>("/api/billing/checkout", { method: "POST", body: JSON.stringify({ plan }) }),
 };

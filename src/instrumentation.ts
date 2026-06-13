@@ -1,34 +1,12 @@
 /**
- * Next.js instrumentation. Runs once when the server process starts (Node
- * runtime only). We use it for:
- *  - graceful shutdown: drain the Postgres pool on SIGTERM/SIGINT so a deploy
- *    or container stop closes connections cleanly instead of severing in-flight
- *    queries.
- *  - error capture: `onRequestError` funnels uncaught server errors through the
- *    same reporting seam as handled 500s.
+ * Next.js instrumentation. Kept deliberately free of any Node-only imports
+ * (e.g. the Postgres driver) because Next traces this file for the edge runtime
+ * too, where those can't be bundled. Graceful DB-pool shutdown lives in
+ * db/client.ts instead (a Node-only module). Here we only register the
+ * server-error hook, which depends solely on the edge-safe logger.
  */
 export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
-
-  const { logger } = await import("@/server/logger");
-  const { closeDb } = await import("@/server/db/client");
-
-  let shuttingDown = false;
-  const shutdown = async (signal: string) => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    logger.info("server.shutdown", { signal });
-    try {
-      await closeDb();
-    } catch (err) {
-      logger.reportError("server.shutdown_error", err);
-    } finally {
-      process.exit(0);
-    }
-  };
-
-  process.once("SIGTERM", () => void shutdown("SIGTERM"));
-  process.once("SIGINT", () => void shutdown("SIGINT"));
+  // no-op: see db/client.ts for graceful shutdown registration
 }
 
 /** Next 15 server-error hook — report uncaught request errors. */

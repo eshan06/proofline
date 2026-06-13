@@ -52,6 +52,7 @@ export class MemoryRepository implements Repository {
   private users: Map<string, UserRecord>;
   private memberships: { userId: string; workspaceId: string; role: MemberRole }[];
   private widgetConvos: Map<string, WidgetConvo>;
+  private authTokens: Map<string, { kind: "reset" | "verify"; userId: string; expiresAt: number }>;
 
   constructor() {
     const g = globalThis as unknown as {
@@ -61,16 +62,18 @@ export class MemoryRepository implements Repository {
         users: Map<string, UserRecord>;
         memberships: { userId: string; workspaceId: string; role: MemberRole }[];
         widgetConvos: Map<string, WidgetConvo>;
+        authTokens: Map<string, { kind: "reset" | "verify"; userId: string; expiresAt: number }>;
       };
     };
     if (!g.__plMem) {
-      g.__plMem = { sessions: new Map(), workspaces: new Map(), users: new Map(), memberships: [], widgetConvos: new Map() };
+      g.__plMem = { sessions: new Map(), workspaces: new Map(), users: new Map(), memberships: [], widgetConvos: new Map(), authTokens: new Map() };
     }
     this.sessions = g.__plMem.sessions;
     this.workspaces = g.__plMem.workspaces;
     this.users = g.__plMem.users;
     this.memberships = g.__plMem.memberships;
     this.widgetConvos = g.__plMem.widgetConvos;
+    this.authTokens = g.__plMem.authTokens;
   }
 
   private ws(workspaceId: string): WorkspaceData {
@@ -177,7 +180,7 @@ export class MemoryRepository implements Repository {
   /* auth ----------------------------------------------------------------- */
 
   async createUserWithWorkspace(input: { email: string; name: string; passwordHash: string; workspaceName?: string }) {
-    const user: UserRecord = { id: `u_${uid("u")}`, email: input.email.toLowerCase(), name: input.name, passwordHash: input.passwordHash };
+    const user: UserRecord = { id: `u_${uid("u")}`, email: input.email.toLowerCase(), name: input.name, passwordHash: input.passwordHash, emailVerified: false };
     this.users.set(user.email, user);
     const workspaceId = `ws_${uid("w")}`;
     this.workspaces.set(workspaceId, seedWorkspaceData(input.workspaceName ?? `${input.name}'s workspace`));
@@ -192,6 +195,45 @@ export class MemoryRepository implements Repository {
   async getUser(userId: string): Promise<UserRecord | null> {
     for (const u of this.users.values()) if (u.id === userId) return u;
     return null;
+  }
+
+  private userById(userId: string): UserRecord | undefined {
+    for (const u of this.users.values()) if (u.id === userId) return u;
+    return undefined;
+  }
+
+  async createPasswordReset(userId: string): Promise<string> {
+    const token = secureToken(24);
+    this.authTokens.set(token, { kind: "reset", userId, expiresAt: Date.now() + 60 * 60 * 1000 });
+    return token;
+  }
+  async consumePasswordReset(token: string): Promise<string | null> {
+    const t = this.authTokens.get(token);
+    if (!t || t.kind !== "reset") return null;
+    this.authTokens.delete(token);
+    return t.expiresAt < Date.now() ? null : t.userId;
+  }
+  async setPassword(userId: string, passwordHash: string): Promise<void> {
+    const u = this.userById(userId);
+    if (u) u.passwordHash = passwordHash;
+  }
+  async deleteUserSessions(userId: string): Promise<void> {
+    for (const [id, s] of this.sessions) if (s.userId === userId) this.sessions.delete(id);
+  }
+  async createEmailVerification(userId: string): Promise<string> {
+    const token = secureToken(24);
+    this.authTokens.set(token, { kind: "verify", userId, expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
+    return token;
+  }
+  async consumeEmailVerification(token: string): Promise<string | null> {
+    const t = this.authTokens.get(token);
+    if (!t || t.kind !== "verify") return null;
+    this.authTokens.delete(token);
+    return t.expiresAt < Date.now() ? null : t.userId;
+  }
+  async markEmailVerified(userId: string): Promise<void> {
+    const u = this.userById(userId);
+    if (u) u.emailVerified = true;
   }
 
   async membershipRole(userId: string, workspaceId: string): Promise<MemberRole | null> {

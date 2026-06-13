@@ -37,6 +37,10 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // Lean container image: only the server + traced deps are copied (see Dockerfile).
   output: "standalone",
+  // The `postgres` driver is Node-only; keep it external so it's never pulled
+  // into an edge bundle (e.g. when instrumentation.ts is traced for the edge
+  // runtime) — bundling its source there fails to parse.
+  serverExternalPackages: ["postgres"],
   eslint: { dirs: ["src"] },
   poweredByHeader: false,
   async headers() {

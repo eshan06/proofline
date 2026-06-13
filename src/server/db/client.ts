@@ -52,8 +52,29 @@ export function getDb(): Db {
     });
     g.__plSql = sql;
     g.__plDb = drizzle(sql, { schema });
+    registerShutdown();
   }
   return g.__plDb;
+}
+
+/**
+ * Drain the pool on SIGTERM/SIGINT so a deploy/container-stop closes connections
+ * cleanly. Registered here (a Node-only module loaded only by server code) on
+ * first pool creation, rather than in instrumentation.ts which Next also traces
+ * for the edge runtime where the Postgres driver can't be bundled.
+ */
+let shutdownRegistered = false;
+function registerShutdown(): void {
+  if (shutdownRegistered || process.env.NEXT_RUNTIME !== "nodejs") return;
+  shutdownRegistered = true;
+  const handle = (signal: string) => {
+    closeDb()
+      .catch(() => {})
+      .finally(() => process.exit(0));
+    void signal;
+  };
+  process.once("SIGTERM", () => handle("SIGTERM"));
+  process.once("SIGINT", () => handle("SIGINT"));
 }
 
 /** Raw client for migrations / extension setup. */
