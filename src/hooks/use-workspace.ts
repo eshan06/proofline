@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseMutationOptions,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiClientError } from "@/lib/api-client";
 import { toast } from "@/stores/toasts";
 import type { Workspace } from "@/lib/schemas";
@@ -43,7 +38,7 @@ export function useWorkspaceMutation<TVars>(opts: {
   onErrorToast?: (err: Error, vars: TVars) => string | null;
   /** Skip the automatic refetch (for flows that orchestrate their own). */
   skipInvalidate?: boolean;
-  onSuccess?: UseMutationOptions<unknown, Error, TVars, OptimisticContext>["onSuccess"];
+  onSuccess?: (data: unknown, vars: TVars) => void;
 }) {
   const queryClient = useQueryClient();
   return useMutation<unknown, Error, TVars, OptimisticContext>({
@@ -65,10 +60,10 @@ export function useWorkspaceMutation<TVars>(opts: {
         (err instanceof ApiClientError ? err.message : "Something went wrong — change rolled back");
       if (msg) toast(msg);
     },
-    onSuccess: (data, vars, context) => {
+    onSuccess: (data, vars) => {
       const msg = opts.onSuccessToast?.(vars);
       if (msg) toast(msg);
-      opts.onSuccess?.(data, vars, context);
+      opts.onSuccess?.(data, vars);
     },
     onSettled: () => {
       if (!opts.skipInvalidate) {
