@@ -8,7 +8,16 @@ escalates every send.
 
 This is a production-shaped Next.js implementation of the design in
 `design_handoff_proofline/`. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the
-stack decisions, data model, AI-pipeline abstraction, and risk analysis.
+stack decisions and [`PRODUCTION.md`](./PRODUCTION.md) for the readiness roadmap
+(what's done & tested, what needs your keys, what's left).
+
+**Two run modes, one codebase:**
+- **Zero-setup** (no `DATABASE_URL`): runs entirely in-memory with a deterministic
+  fixture provider — the demo and tests work with `npm run dev` and nothing else.
+- **Real backend** (`DATABASE_URL` set): Postgres persistence + multi-tenancy,
+  email/password auth, and a real RAG pipeline on pgvector (chunk → embed →
+  retrieve → score → cite → refuse). LLM/embeddings/email/billing are behind
+  interfaces selected by env (mock transports until you add keys).
 
 ## Stack
 
