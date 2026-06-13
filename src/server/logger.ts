@@ -26,6 +26,26 @@ export const logger = {
   info: (msg: string, fields?: Record<string, unknown>) => emit("info", msg, fields),
   warn: (msg: string, fields?: Record<string, unknown>) => emit("warn", msg, fields),
   error: (msg: string, fields?: Record<string, unknown>) => emit("error", msg, fields),
+  /**
+   * Report an exception. Always logs structured error JSON; additionally
+   * forwards a one-line alert to ERROR_WEBHOOK_URL when set (Slack/Discord/any
+   * incoming webhook), so production errors surface somewhere a human watches.
+   * This is the seam a richer sink (Sentry) drops into without touching callers.
+   */
+  reportError: (msg: string, err: unknown, fields?: Record<string, unknown>) => {
+    const error = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    emit("error", msg, { ...fields, error, stack });
+    const url = process.env.ERROR_WEBHOOK_URL;
+    if (url) {
+      const id = fields && "errorId" in fields ? ` (${(fields as { errorId?: string }).errorId})` : "";
+      void fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: `🚨 [proofline] ${msg}${id}: ${error}` }),
+      }).catch(() => {});
+    }
+  },
   /** Product analytics event (demo_step_completed, etc.). */
   event: (name: string, fields?: Record<string, unknown>) =>
     emit("info", "analytics", { event: name, ...fields }),

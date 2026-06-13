@@ -61,3 +61,17 @@ export function getSql() {
   getDb();
   return g.__plSql!;
 }
+
+/**
+ * Close the connection pool if one was opened. Called on graceful shutdown
+ * (see src/instrumentation.ts) so in-flight queries drain and sockets close
+ * cleanly on deploy/SIGTERM instead of being severed. No-op if never connected.
+ */
+export async function closeDb(): Promise<void> {
+  if (g.__plSql) {
+    const sql = g.__plSql;
+    g.__plSql = undefined;
+    g.__plDb = undefined;
+    await sql.end({ timeout: 5 });
+  }
+}

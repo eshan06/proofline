@@ -4,6 +4,7 @@ import { currentSession } from "@/server/session";
 import { NotFoundError, repo, type SessionInfo } from "@/server/repository";
 import { logger } from "@/server/logger";
 import { clientKey, rateLimit, type RateLimit } from "@/server/rate-limit";
+import { secureToken } from "@/lib/utils";
 
 /**
  * Small shared plumbing for route handlers: session guard, zod-validated
@@ -70,10 +71,11 @@ export function handleApi<T>(fn: () => Promise<T>): Promise<NextResponse> {
       if (err instanceof NotFoundError || (err instanceof Error && err.name === "NotFoundError")) {
         return NextResponse.json({ error: err.message }, { status: 404 });
       }
-      logger.error("api.unhandled", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-      return NextResponse.json({ error: "Internal error" }, { status: 500 });
+      // Unexpected: report it (logs + optional alert) with a short correlation
+      // id the client surfaces, so a user's "error abc123" maps to one log line.
+      const errorId = secureToken(4);
+      logger.reportError("api.unhandled", err, { errorId });
+      return NextResponse.json({ error: "Internal error", errorId }, { status: 500 });
     },
   );
 }
