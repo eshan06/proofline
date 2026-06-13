@@ -1,10 +1,5 @@
 import type { KbDoc, PlaygroundResult, Ticket, Tone } from "@/lib/schemas";
-import {
-  MOCK_LATENCY,
-  type DraftProvider,
-  type DraftProviderOptions,
-  type DraftResult,
-} from "./provider";
+import { MOCK_LATENCY, type DraftProvider, type DraftResult } from "./provider";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -42,7 +37,7 @@ export class MockDraftProvider implements DraftProvider {
     };
   }
 
-  async answer(question: string, kb: KbDoc[], _opts: DraftProviderOptions): Promise<PlaygroundResult> {
+  async answer(question: string, kb: KbDoc[]): Promise<PlaygroundResult> {
     await sleep(this.latency.playground);
     return mockAnswer(question, kb);
   }

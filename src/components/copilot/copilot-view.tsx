@@ -6,7 +6,6 @@ import { Playground } from "./playground";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { usePatchCopilot } from "@/hooks/use-copilot";
-import { toast } from "@/stores/toasts";
 import type { CopilotSettings } from "@/lib/schemas";
 
 const TONES: CopilotSettings["tone"][] = ["Friendly", "Concise", "Formal", "Technical"];

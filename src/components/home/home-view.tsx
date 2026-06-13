@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { BarChart3, LayoutGrid, Plus, Sparkles, Zap, AlertTriangle } from "lucide-react";
+import { LayoutGrid, Plus, Sparkles, Zap, AlertTriangle } from "lucide-react";
 import { ChannelIcon } from "@/components/shared/channel-icon";
 import {
   homeActivity,

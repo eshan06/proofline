@@ -193,7 +193,6 @@ function Table({
         <span className="text-right">Updated</span>
       </div>
       {tickets.map((t) => {
-        const pr = priorityMap[t.priority];
         const st = stageMap[t.stage];
         const sel = !!selected[t.id];
         return (

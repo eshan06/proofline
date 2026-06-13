@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, FileText, Plus } from "lucide-react";
@@ -28,7 +28,7 @@ export function KbView() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { data: ws } = useWorkspace();
-  const docs = ws?.kbDocs ?? [];
+  const docs = useMemo(() => ws?.kbDocs ?? [], [ws?.kbDocs]);
   const uploadingRef = useRef(false);
 
   const upload = async () => {

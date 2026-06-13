@@ -7,8 +7,6 @@ import { useToggleIntegration } from "@/hooks/use-integrations";
 import { toast } from "@/stores/toasts";
 import type { Integration, IntegrationKey } from "@/lib/schemas";
 
-const CONFIGURABLE: IntegrationKey[] = ["webchat", "gmail", "slack"];
-
 export function IntegrationsView() {
   const { data: ws } = useWorkspace();
   const integrations = ws?.integrations ?? [];
