@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { ZodSchema } from "zod";
 import { currentSession } from "@/server/session";
 import { NotFoundError, type SessionRecord } from "@/server/store";
+import { logger } from "@/server/logger";
 
 /**
  * Small shared plumbing for route handlers: session guard, zod-validated
@@ -44,16 +45,15 @@ export function handleApi<T>(fn: () => Promise<T>): Promise<NextResponse> {
       if (err instanceof NotFoundError) {
         return NextResponse.json({ error: err.message }, { status: 404 });
       }
-      console.error("[api]", err);
+      logger.error("api.unhandled", {
+        error: err instanceof Error ? err.message : String(err),
+      });
       return NextResponse.json({ error: "Internal error" }, { status: 500 });
     },
   );
 }
 
-/** Product analytics — v1 sink is the server log; the seam for a real pipeline. */
+/** Product analytics — flows through the structured logger; seam for a real pipeline. */
 export function trackEvent(session: SessionRecord, name: string, props?: Record<string, unknown>) {
-  console.info(
-    `[analytics] ${name}`,
-    JSON.stringify({ session: session.id.slice(0, 12), type: session.type, ...props }),
-  );
+  logger.event(name, { session: session.id.slice(0, 12), sessionType: session.type, ...props });
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Logo } from "@/components/shell/logo";
+import { BodyBackground } from "./body-background";
 import { HeroProofCard } from "./hero-proof-card";
 import { DemoStage } from "./demo-stage";
 import { Marquee } from "./marquee";
@@ -13,6 +14,7 @@ import { useCountUp } from "./use-count-up";
 export function LandingPage() {
   return (
     <div className="overflow-x-hidden font-sans text-ink" style={{ background: "#07090F" }}>
+      <BodyBackground color="#07090F" />
       <Nav />
       <Hero />
 

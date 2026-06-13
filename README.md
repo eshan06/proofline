@@ -45,15 +45,34 @@ npm run dev          # http://localhost:3000
 ```bash
 npm run typecheck    # tsc --noEmit (strict, noUncheckedIndexedAccess)
 npm run lint         # eslint (next/core-web-vitals + typescript)
-npm test             # vitest — 39 tests
+npm test             # vitest — 39 unit tests
+npm run test:e2e     # playwright — critical-path smoke (builds + starts the app)
 npm run build        # next build
 ```
 
-Tests cover where they earn their keep: the confidence color scale (incl. exact
-0.80/0.65 boundaries), the inbox data layer (filters/counts/search), the
+Unit tests cover where they earn their keep: the confidence color scale (incl.
+exact 0.80/0.65 boundaries), the inbox data layer (filters/counts/search), the
 automations engine (triggers/conditions/actions + the low-confidence safety
 net), the mock AI provider's keyword routing + KB-grounded SSO refusal, and the
-command-palette keyboard handling.
+command-palette keyboard handling. The Playwright smoke suite (`e2e/`) drives the
+real browser through the demo boot, the accept-draft loop, the SSO refusal/error
+state, the ⌘K palette, and the playground refusal — proving styles load and the
+happy path works end-to-end. CI (`.github/workflows/ci.yml`) runs both on every
+push/PR.
+
+## Production posture
+
+- **Security headers** on every response (strict CSP, `X-Frame-Options: DENY`,
+  `nosniff`, `Referrer-Policy`, `Permissions-Policy`, HSTS in prod);
+  `x-powered-by` removed. Session cookies are `httpOnly` + `secure` in prod.
+- **Error boundaries** (root + app-section) and a styled 404 — never a white
+  stack trace; an app-shell loading skeleton avoids layout shift.
+- **`/api/health`** liveness probe (unauthenticated, dependency-free) reports
+  the active AI provider.
+- **Structured JSON logging** (`src/server/logger.ts`) is the seam for a log
+  pipeline; analytics events flow through it.
+- **Config** via env (`.env.example`): `AI_PROVIDER`, the real-provider keys,
+  `DEMO_AI_CALL_LIMIT`.
 
 ## How the AI works (and swaps for a real provider)
 
