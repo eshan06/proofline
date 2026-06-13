@@ -1,5 +1,6 @@
 import type {
   AIDraft,
+  AuditEvent,
   Automation,
   AutomationRun,
   CopilotSettings,
@@ -32,6 +33,9 @@ export interface UserRecord {
 
 export class NotFoundError extends Error {}
 
+export type { WidgetTranscriptMessage } from "./web-ticket";
+import type { WidgetTranscriptMessage } from "./web-ticket";
+
 /**
  * The data boundary the whole app depends on. Two implementations exist —
  * in-memory (default; tests, demo, zero-setup dev) and Postgres (when
@@ -59,6 +63,7 @@ export interface Repository {
     workspaceName?: string;
   }): Promise<{ user: UserRecord; workspaceId: string }>;
   findUserByEmail(email: string): Promise<UserRecord | null>;
+  getUser(userId: string): Promise<UserRecord | null>;
   membershipRole(userId: string, workspaceId: string): Promise<MemberRole | null>;
   /** The user's primary (first) workspace id, or null if they have none. */
   primaryWorkspaceForUser(userId: string): Promise<string | null>;
@@ -73,9 +78,9 @@ export interface Repository {
 
   /* tickets */
   findTicket(workspaceId: string, id: string): Promise<Ticket | null>;
-  patchTicket(workspaceId: string, id: string, patch: TicketPatch): Promise<Ticket>;
-  addReply(workspaceId: string, id: string, text: string, viaAI: boolean): Promise<Ticket>;
-  addNote(workspaceId: string, id: string, text: string): Promise<Ticket>;
+  patchTicket(workspaceId: string, id: string, patch: TicketPatch, actor: string): Promise<Ticket>;
+  addReply(workspaceId: string, id: string, text: string, viaAI: boolean, actor: string): Promise<Ticket>;
+  addNote(workspaceId: string, id: string, text: string, actor: string): Promise<Ticket>;
   setDraft(workspaceId: string, id: string, draft: AIDraft): Promise<Ticket>;
 
   /* knowledge base */
@@ -94,4 +99,21 @@ export interface Repository {
   patchIntegration(workspaceId: string, key: IntegrationKey, connected: boolean): Promise<Integration>;
   inviteMember(workspaceId: string, email: string, role: MemberRole): Promise<Member>;
   patchCopilot(workspaceId: string, patch: Partial<CopilotSettings>): Promise<CopilotSettings>;
+
+  /* audit log — security-relevant actions are appended here */
+  appendAudit(workspaceId: string, event: { user: string; action: string; type: AuditEvent["type"] }): Promise<void>;
+
+  /* website chat widget (public intake) */
+  /** Resolve a public widget site key to its workspace + CORS allowlist, or null if unknown/disabled. */
+  resolveSiteKey(siteKey: string): Promise<{ workspaceId: string; allowedOrigins: string[] } | null>;
+  /** Open a new web-chat conversation (creates a ticket); returns the visitor's token + ticket id. */
+  startWidgetConversation(
+    workspaceId: string,
+    visitor: { name?: string; email?: string },
+    firstText: string,
+  ): Promise<{ token: string; ticketId: string }>;
+  /** Append a visitor message to an existing conversation. False if the token is unknown. */
+  appendWidgetMessage(workspaceId: string, token: string, text: string): Promise<boolean>;
+  /** The visitor-facing transcript (customer + agent turns), or null if the token is unknown. */
+  getWidgetTranscript(workspaceId: string, token: string): Promise<WidgetTranscriptMessage[] | null>;
 }

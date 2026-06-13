@@ -1,16 +1,72 @@
-import { handleApi, requireSession, trackEvent } from "@/server/api";
+import { ApiError, handleApi, requireSession, trackEvent } from "@/server/api";
 import { MOCK_LATENCY } from "@/server/ai/provider";
 import { repo } from "@/server/repository";
+import { hasDatabase } from "@/server/db/client";
+import { chunkText, ingestDocument } from "@/server/ai/rag";
+import { logger } from "@/server/logger";
 
 /**
- * Mock upload: a new document lands in "processing" immediately and flips to
- * "indexed · 26 chunks" after the indexing latency (2.2s). The flip happens
- * server-side (workspace-scoped); the client polls via its workspace refetch.
+ * Knowledge-base upload. Two paths share this endpoint:
+ *
+ *  • Real upload (multipart/form-data with a `file`): the file's text is
+ *    extracted, a doc is created, and — when a database is configured — the
+ *    text is chunked, embedded, and stored in pgvector via `ingestDocument`, so
+ *    the content is genuinely retrievable by the copilot. (In the zero-setup
+ *    in-memory backend there is no vector store, so we record the doc + real
+ *    chunk count but retrieval stays on the fixture corpus.)
+ *
+ *  • Canned demo path (no file): preserves the guided demo / `?upload=1` flow —
+ *    a "Refund-policy-v3.pdf" doc lands in "processing" and flips to indexed.
  */
-export async function POST() {
+export async function POST(req: Request) {
   return handleApi(async () => {
     const session = await requireSession();
     const r = repo();
+    const contentType = req.headers.get("content-type") ?? "";
+
+    if (contentType.includes("multipart/form-data")) {
+      const form = await req.formData();
+      const file = form.get("file");
+      if (!(file instanceof File)) throw new ApiError(400, "No file provided.");
+      const name = (file.name || "Untitled.txt").slice(0, 160);
+      const text = await extractText(file, name);
+      if (!text.trim()) throw new ApiError(400, "That file appears to be empty.");
+
+      const doc = await r.addKbDoc(session.workspaceId, {
+        name,
+        source: "Upload",
+        status: "processing",
+        chunks: "…",
+        cited: "0",
+        synced: "just now",
+      });
+
+      try {
+        const chunkCount = hasDatabase()
+          ? await ingestDocument({
+              workspaceId: session.workspaceId,
+              docId: `${session.workspaceId}_${doc.id}`,
+              docTitle: name,
+              sections: [{ path: name, text }],
+            })
+          : chunkText(text).length;
+        const updated = await r.updateKbDoc(session.workspaceId, doc.id, {
+          status: "indexed",
+          chunks: String(chunkCount),
+        });
+        if (await r.completeDemoStep(session.id, "upload")) {
+          trackEvent(session, "demo_step_completed", { step: "upload" });
+        }
+        logger.event("kb.document_ingested", { workspaceId: session.workspaceId, name, chunks: chunkCount });
+        return updated;
+      } catch (err) {
+        logger.error("kb.ingest_failed", { name, error: err instanceof Error ? err.message : String(err) });
+        return r.updateKbDoc(session.workspaceId, doc.id, { status: "failed", chunks: "0" });
+      }
+    }
+
+    // Canned demo path (no file): mirrors the original mock so the guided demo
+    // and `?upload=1` quick action keep working with zero input.
     const doc = await r.addKbDoc(session.workspaceId, {
       name: "Refund-policy-v3.pdf",
       source: "Upload",
@@ -19,17 +75,43 @@ export async function POST() {
       cited: "0",
       synced: "just now",
     });
-
     if (await r.completeDemoStep(session.id, "upload")) {
       trackEvent(session, "demo_step_completed", { step: "upload" });
     }
-
     const { workspaceId } = session;
     const docId = doc.id;
     setTimeout(() => {
       void r.updateKbDoc(workspaceId, docId, { status: "indexed", chunks: "26" }).catch(() => {});
     }, MOCK_LATENCY.kbIndexing);
-
     return doc;
   });
+}
+
+const TEXT_EXT = /\.(txt|text|md|markdown|csv|tsv|json|log|rst)$/i;
+const HTML_EXT = /\.(html?|xml)$/i;
+
+/**
+ * Extract plain text from an uploaded file. Text and Markdown are read
+ * directly; HTML has its tags stripped. Binary formats (PDF/DOCX) require a
+ * parser we don't bundle yet — surfaced as a clear 415 rather than ingesting
+ * garbage.
+ */
+async function extractText(file: File, name: string): Promise<string> {
+  const type = file.type.toLowerCase();
+  if (type.startsWith("text/") || TEXT_EXT.test(name) || type === "application/json") {
+    return file.text();
+  }
+  if (type === "text/html" || HTML_EXT.test(name)) {
+    const raw = await file.text();
+    return raw
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  throw new ApiError(
+    415,
+    "PDF and Word parsing needs the document-parser add-on. Upload a .txt, .md, .csv, .json, or .html file (or paste the text) for now.",
+  );
 }

@@ -5,7 +5,7 @@ import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useToggleIntegration } from "@/hooks/use-integrations";
 import { toast } from "@/stores/toasts";
-import type { Integration, IntegrationKey } from "@/lib/schemas";
+import type { Integration, IntegrationKey, WidgetConfig } from "@/lib/schemas";
 
 export function IntegrationsView() {
   const { data: ws } = useWorkspace();
@@ -83,7 +83,7 @@ export function IntegrationsView() {
         </div>
 
         {openPanel === "webchat" && integrations.find((i) => i.key === "webchat")?.connected ? (
-          <WebchatPanel onClose={() => setOpenPanel("")} />
+          <WebchatPanel widget={ws?.widget} onClose={() => setOpenPanel("")} />
         ) : null}
         {openPanel === "gmail" && integrations.find((i) => i.key === "gmail")?.connected ? (
           <GmailPanel onClose={() => setOpenPanel("")} />
@@ -109,21 +109,29 @@ function PanelShell({ title, badge, badgeColor, badgeBg, onClose, children }: { 
   );
 }
 
-function WebchatPanel({ onClose }: { onClose: () => void }) {
+function WebchatPanel({ widget, onClose }: { widget: WidgetConfig | undefined; onClose: () => void }) {
   const [color, setColor] = useState("#4D7CFE");
   const swatches = ["#4D7CFE", "#8B5CF6", "#2DD4BF", "#F5B74E"];
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const siteKey = widget?.siteKey ?? "";
+  const snippet = `<script src="${origin}/api/widget/embed?key=${siteKey}" async></script>`;
+  const allowed = widget?.allowedOrigins ?? [];
+  const copy = () => {
+    navigator.clipboard?.writeText(snippet).then(
+      () => toast("Embed snippet copied to clipboard"),
+      () => toast("Copy failed — select and copy manually"),
+    );
+  };
   return (
     <PanelShell title="Website Chat setup" badge="Live" badgeColor="#3DD68C" badgeBg="rgba(61,214,140,0.1)" onClose={onClose}>
       <div className="grid grid-cols-[1.3fr_1fr] gap-[18px] px-[18px] py-4">
         <div className="flex min-w-0 flex-col gap-[13px]">
           <div className="flex flex-col gap-[7px]">
             <span className="text-[11px] font-semibold text-ink-4">Embed snippet</span>
-            <div className="relative overflow-x-auto rounded-[9px] border border-white/8 bg-black/35 px-3.5 py-3 font-mono text-[11px] leading-[1.7] text-ink-3">
-              <span className="text-muted">&lt;script&gt;</span><br />
-              &nbsp;&nbsp;window.prooflineId = <span className="text-accent-soft">&quot;acme_7f3k2&quot;</span>;<br />
-              <span className="text-muted">&lt;/script&gt;</span><br />
-              <span className="text-muted">&lt;script src=</span><span className="text-accent-soft">&quot;https://cdn.proofline.com/widget.js&quot;</span><span className="text-muted"> async&gt;&lt;/script&gt;</span>
-              <button type="button" onClick={() => toast("Embed snippet copied to clipboard")} className="absolute right-[9px] top-[9px] rounded-[6px] border border-white/10 bg-white/6 px-2.5 py-[3px] text-[10.5px] text-ink-2 hover:bg-white/12">Copy</button>
+            <p className="text-[10.5px] text-muted">Paste this before <span className="font-mono">&lt;/body&gt;</span> on your site. The chat launcher appears bottom-right; messages land in your inbox.</p>
+            <div className="relative overflow-x-auto rounded-[9px] border border-white/8 bg-black/35 px-3.5 py-3 pr-16 font-mono text-[11px] leading-[1.7] text-ink-3">
+              <span className="break-all">{snippet}</span>
+              <button type="button" onClick={copy} className="absolute right-[9px] top-[9px] rounded-[6px] border border-white/10 bg-white/6 px-2.5 py-[3px] text-[10.5px] text-ink-2 hover:bg-white/12">Copy</button>
             </div>
           </div>
           <div className="flex flex-col gap-[7px]">
@@ -137,9 +145,14 @@ function WebchatPanel({ onClose }: { onClose: () => void }) {
           <div className="flex flex-col gap-[7px]">
             <span className="text-[11px] font-semibold text-ink-4">Allowed domains</span>
             <div className="flex flex-wrap gap-1.5">
-              <span className="rounded-full border border-white/8 bg-white/4 px-2.5 py-[3px] font-mono text-[10.5px] text-ink-3">acme.io</span>
-              <span className="rounded-full border border-white/8 bg-white/4 px-2.5 py-[3px] font-mono text-[10.5px] text-ink-3">app.acme.io</span>
-              <button type="button" onClick={() => toast("Add an allowed domain")} className="rounded-full border border-dashed border-white/15 px-2.5 py-[3px] font-mono text-[10.5px] text-muted hover:border-accent/40 hover:text-accent-soft">+ add</button>
+              {allowed.length ? (
+                allowed.map((d) => (
+                  <span key={d} className="rounded-full border border-white/8 bg-white/4 px-2.5 py-[3px] font-mono text-[10.5px] text-ink-3">{d}</span>
+                ))
+              ) : (
+                <span className="rounded-full border border-white/8 bg-white/4 px-2.5 py-[3px] font-mono text-[10.5px] text-muted">Any origin — add domains to restrict</span>
+              )}
+              <button type="button" onClick={() => toast("Domain allowlist editing — coming soon")} className="rounded-full border border-dashed border-white/15 px-2.5 py-[3px] font-mono text-[10.5px] text-muted hover:border-accent/40 hover:text-accent-soft">+ add</button>
             </div>
           </div>
         </div>

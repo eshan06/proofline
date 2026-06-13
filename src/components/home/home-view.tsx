@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { LayoutGrid, Plus, Sparkles, Zap, AlertTriangle } from "lucide-react";
 import { ChannelIcon } from "@/components/shared/channel-icon";
+import { useWorkspace } from "@/hooks/use-workspace";
 import {
   homeActivity,
   homeAttention,
@@ -15,6 +16,8 @@ const today = "Saturday, June 13";
 
 export function HomeView() {
   const router = useRouter();
+  const { data: ws } = useWorkspace();
+  const firstName = ws?.currentUser?.name.split(/\s+/)[0] ?? "there";
 
   const quickActions = [
     { label: "Upload docs", icon: Plus, run: () => router.push("/kb?upload=1") },
@@ -35,7 +38,7 @@ export function HomeView() {
         {/* greeting + quick actions */}
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-[3px]">
-            <div className="text-[19px] font-semibold tracking-[-0.02em] text-ink">Good morning, Eshan</div>
+            <div className="text-[19px] font-semibold tracking-[-0.02em] text-ink">Good morning, {firstName}</div>
             <div className="text-[12px] text-muted">{today} · 6 conversations need your attention</div>
           </div>
           <span className="flex-1" />

@@ -8,6 +8,13 @@
       "when": 1781346336915,
       "tag": "0000_flat_big_bertha",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781383505879,
+      "tag": "0001_widget_channel",
+      "breakpoints": true
     }
   ]
 }

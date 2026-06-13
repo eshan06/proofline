@@ -33,6 +33,11 @@ export const workspaces = pgTable("workspaces", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   plan: text("plan").notNull().default("Growth"),
+  // Website chat widget: a public (non-secret) site key identifies the tenant
+  // in the embed script; allowed origins gate cross-origin intake (CORS).
+  widgetSiteKey: text("widget_site_key").unique(),
+  widgetEnabled: boolean("widget_enabled").notNull().default(true),
+  widgetAllowedOrigins: jsonb("widget_allowed_origins").$type<string[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -77,6 +82,25 @@ export const passwordResets = pgTable("password_resets", {
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
+
+/**
+ * Website chat widget conversations. The `token` is an unguessable per-visitor
+ * key held only by that visitor's browser — it is how an *unauthenticated*
+ * widget addresses its ticket without being able to read anyone else's (the
+ * human ticket id is never exposed to the widget).
+ */
+export const widgetConversations = pgTable(
+  "widget_conversations",
+  {
+    token: text("token").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    ticketId: text("ticket_id").notNull(),
+    visitorName: text("visitor_name"),
+    visitorEmail: text("visitor_email"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("widget_convos_ws_idx").on(t.workspaceId)],
+);
 
 /* ---------------------------------------------------------------- support data */
 

@@ -40,7 +40,7 @@ export function useEscalateTicket() {
         stage: "escalated",
         messages: [
           ...t.messages,
-          { id: `tmp-${Date.now()}`, kind: "status", time: "just now", text: "Escalated to engineering by Eshan · just now" },
+          { id: `tmp-${Date.now()}`, kind: "status", time: "just now", text: `Escalated to engineering by ${ws.currentUser?.name ?? "Eshan"} · just now` },
         ],
       })),
     onSuccessToast: () => "Escalated to engineering",
@@ -57,7 +57,7 @@ export function useCloseTicket() {
         stage: "resolved",
         messages: [
           ...t.messages,
-          { id: `tmp-${Date.now()}`, kind: "status", time: "just now", text: "Ticket closed by Eshan · just now" },
+          { id: `tmp-${Date.now()}`, kind: "status", time: "just now", text: `Ticket closed by ${ws.currentUser?.name ?? "Eshan"} · just now` },
         ],
       })),
     onSuccessToast: () => "Ticket closed",
@@ -75,7 +75,7 @@ export function useSendReply() {
         unread: false,
         messages: [
           ...t.messages,
-          { id: `tmp-${Date.now()}`, kind: "agent", author: "Eshan", time: "just now", text, viaAI },
+          { id: `tmp-${Date.now()}`, kind: "agent", author: ws.currentUser?.name ?? "Eshan", time: "just now", text, viaAI },
         ],
       })),
     onSuccessToast: ({ customerName }) => `Reply sent to ${customerName}`,
@@ -90,7 +90,7 @@ export function useAddNote() {
         ...t,
         messages: [
           ...t.messages,
-          { id: `tmp-${Date.now()}`, kind: "note", author: "Eshan", time: "just now", text },
+          { id: `tmp-${Date.now()}`, kind: "note", author: ws.currentUser?.name ?? "Eshan", time: "just now", text },
         ],
       })),
     onSuccessToast: () => "Internal note added",

@@ -30,6 +30,25 @@ Legend: ✅ done & tested · 🔌 built, needs your credentials to go live · �
 ### Auth ✅
 - Email/password signup + login + logout (scrypt hashing, DB-backed sessions).
   Verified: login ok / wrong password 401. Middleware requires auth in DB mode.
+- **Session ids are cryptographically random** (`crypto.getRandomValues`, not a
+  guessable timestamp+counter) — the cookie is the bearer credential, so this
+  closes session prediction/hijacking.
+- **Timing-constant login** (scrypt runs on the no-such-user path) defeats email
+  enumeration; **per-account throttle** bounds brute force even under IP rotation.
+- **CSRF defense**: mutating `/api/*` requests with a foreign `Origin` are
+  rejected in middleware (verified: cross-origin POST → 403; widget intake +
+  Stripe webhook exempt by design).
+
+### Channels ✅ (website chat — first real round-trip)
+- **Website chat widget, end-to-end**: a public embed script (`/api/widget/embed`)
+  mounts a launcher on any site; visitor messages hit an origin-allowlisted,
+  unauthenticated intake (`/api/widget/[siteKey]/messages`) that opens/append to
+  a real ticket; approved agent replies stream back to the visitor by polling.
+  Authorized by a public site key (tenant) + an unguessable per-visitor token
+  (conversation) — never a cookie. Verified end-to-end via curl: inbound →
+  ticket in inbox → agent reply → delivered to the widget; forged tokens and
+  unknown site keys 404; CORS preflight + cross-origin POST work. The real embed
+  snippet + a live preview (`/widget-preview`) are in the product.
 
 ### AI / RAG ✅
 - Real pipeline on pgvector: chunk → embed → store; cosine-kNN retrieval;
@@ -40,10 +59,23 @@ Legend: ✅ done & tested · 🔌 built, needs your credentials to go live · �
   so the providers below are drop-in.
 
 ### Infra ✅
-- Token-bucket rate limiting on auth + AI endpoints (verified 429 after burst).
-- Structured JSON logging, `/api/health`, GitHub Actions CI (typecheck/lint/test/build + e2e).
+- Token-bucket rate limiting on auth + AI + widget endpoints (verified 429 after
+  burst). The client-IP key is **proxy-spoofing resistant** (rightmost
+  `x-forwarded-for` by default; `RATE_LIMIT_PROXY_HOPS` for deeper chains), and
+  demo-session minting is itself rate-limited so a cookie reset can't farm AI budget.
+- Structured JSON logging, `/api/health` (liveness) + `/api/health/ready`
+  (readiness — pings Postgres in DB mode), GitHub Actions CI (typecheck/lint/test/build + e2e).
 - Dockerfile (standalone, non-root, healthcheck) + docker-compose (app + pgvector).
-- 51 unit tests + 7 E2E.
+- 58 unit tests + 7 E2E.
+
+### Identity & data integrity ✅
+- The **real signed-in user** drives the app shell (sidebar, topbar, home greeting)
+  and authors their own replies / status changes — no more hardcoded "Eshan Patel".
+  Verified: signup → workspace payload carries `currentUser`.
+- Signup provisioning (user + seeded workspace + membership) is **transaction-wrapped**
+  — a mid-seed failure can't orphan a user or leave a half-workspace; corpus
+  embedding runs after commit, best-effort.
+- **Real audit events** recorded on member invites and integration connect/disconnect.
 
 ---
 
@@ -71,15 +103,19 @@ crashes if a key is missing — it just runs in mock/local mode.
 - Email verification on signup.
 
 **Channels (the actual ingestion)**
-- Website chat widget (embed script → message → ticket).
+- ✅ Website chat widget (embed → message → ticket → reply back) — shipped, see above.
 - Gmail OAuth + sync; Slack app (events API). The Integrations UI + setup panels exist;
   the OAuth flows and inbound webhooks are the work.
-- Outbound send on approve (email/chat delivery) — currently updates the UI only.
+- Outbound send: ✅ delivered for web chat (reply streams to the widget). Email/Slack
+  outbound delivery on approve is the remaining piece.
 
 **RAG quality & scale**
+- ✅ Real KB file upload + ingestion for text formats (.txt/.md/.csv/.json/.html →
+  chunk → embed → pgvector). PDF/Docx need a document-parser add-on (pdf-parse/mammoth)
+  — currently surfaced as a clear 415.
 - Wire a real embedding model (local hashed vectors are dev-only) and re-index.
-- Background ingestion jobs (real file parsing: PDF/Docx → text), incremental re-sync,
-  and a job queue (pg-boss/BullMQ) instead of the current best-effort timers.
+- Background ingestion jobs (incremental re-sync) and a job queue (pg-boss/BullMQ)
+  instead of synchronous ingestion on the request path.
 - Re-ranking and evaluation harness for retrieval quality.
 
 **Billing**
@@ -90,17 +126,19 @@ crashes if a key is missing — it just runs in mock/local mode.
 - Replace the templated Privacy/Terms/Security pages with counsel-reviewed copy.
 - DPA + sub-processor list; GDPR/CCPA data-export & deletion endpoints.
 - SOC 2 program for enterprise deals.
-- Real audit log (currently fixtures) writing on security-relevant actions.
+- Audit log: ✅ now records invites + integration changes; extend to role changes,
+  draft approvals, logins, and add an export.
 
 **Ops**
 - Managed Postgres (RDS) with backups/PITR + read replica; Redis for rate limits
-  and sessions across instances.
+  and sessions across instances (the in-process token-bucket store is correct for a
+  single instance but multiplies limits per replica).
 - Error reporting (Sentry) wired to the existing logger seam; metrics + alerting; uptime/status automation.
+- Graceful shutdown (SIGTERM drain + pool close). Readiness probe ✅ (`/api/health/ready`).
 - Load testing; autoscaling; CDN for static assets.
 
 **Product polish**
-- Wire the real signed-in user into the app shell (name/email/avatar) — currently
-  shows seed values.
+- ✅ Real signed-in user in the app shell (name/email/initials/role) + real reply authorship.
 - Onboarding first-run checklist for real (the demo checklist is the pattern).
 - Accessibility audit to WCAG AA; the app is desktop-first by design (≥1240px) —
   decide whether a mobile app experience is in scope (marketing site is responsive).

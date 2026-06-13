@@ -20,10 +20,18 @@ import {
   seedMembers,
   seedNotifications,
 } from "@/data/workspace";
+import { secureToken } from "@/lib/utils";
+
+export interface WidgetConfig {
+  siteKey: string;
+  enabled: boolean;
+  allowedOrigins: string[];
+}
 
 /** A fresh workspace's full dataset, deep-cloned from the fixtures. */
 export interface WorkspaceData {
   name: string;
+  widget: WidgetConfig;
   tickets: Ticket[];
   customers: Customer[];
   kbDocs: KbDoc[];
@@ -38,16 +46,20 @@ export interface WorkspaceData {
 const clone = <T>(v: T): T => structuredClone(v);
 
 export function seedWorkspaceData(name = "Acme Inc"): WorkspaceData {
-  return clone({
+  return {
     name,
-    tickets: seedTickets,
-    customers: seedCustomers,
-    kbDocs: seedKbDocs,
-    automations: seedAutomations,
-    integrations: seedIntegrations,
-    members: seedMembers,
-    audit: seedAudit,
-    notifications: seedNotifications,
-    copilot: seedCopilotSettings,
-  });
+    // Fresh per workspace, not cloned from a shared fixture.
+    widget: { siteKey: secureToken(16), enabled: true, allowedOrigins: [] },
+    ...clone({
+      tickets: seedTickets,
+      customers: seedCustomers,
+      kbDocs: seedKbDocs,
+      automations: seedAutomations,
+      integrations: seedIntegrations,
+      members: seedMembers,
+      audit: seedAudit,
+      notifications: seedNotifications,
+      copilot: seedCopilotSettings,
+    }),
+  };
 }

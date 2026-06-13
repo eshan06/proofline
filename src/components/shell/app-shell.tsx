@@ -34,9 +34,9 @@ export function AppShell({
       {isDemo ? <DemoBanner demo={workspace.demo} /> : null}
 
       <div className="flex min-h-0 flex-1">
-        <Sidebar />
+        <Sidebar workspaceName={workspace.name} currentUser={workspace.currentUser} />
         <div className="relative flex min-w-0 flex-1 flex-col">
-          <Topbar notifications={workspace.notifications} />
+          <Topbar notifications={workspace.notifications} workspaceName={workspace.name} currentUser={workspace.currentUser} />
           {children}
 
           <CommandPalette tickets={workspace.tickets} />

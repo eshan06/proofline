@@ -7,21 +7,29 @@ import { toast } from "@/stores/toasts";
 import { Kbd } from "@/components/ui/kbd";
 import { PAGE_TITLES } from "./nav-items";
 import { NotificationsPopover } from "./notifications";
-import type { Notification } from "@/lib/schemas";
+import type { CurrentUser, Notification } from "@/lib/schemas";
 
 function pageTitle(pathname: string): string {
   const seg = pathname.split("/")[1] ?? "home";
   return PAGE_TITLES[seg] ?? "Home";
 }
 
-export function Topbar({ notifications }: { notifications: Notification[] }) {
+export function Topbar({
+  notifications,
+  workspaceName,
+  currentUser,
+}: {
+  notifications: Notification[];
+  workspaceName: string;
+  currentUser: CurrentUser | null;
+}) {
   const pathname = usePathname();
   const { togglePalette, toggleNotif, notifOpen } = useUiStore();
 
   return (
     <div className="relative z-40 flex h-12 shrink-0 items-center gap-2.5 border-b border-white/7 bg-panel/70 px-4 backdrop-blur-md">
       <div className="flex items-center gap-[7px] text-[12.5px] text-muted">
-        <span>Acme Inc</span>
+        <span className="max-w-[160px] truncate">{workspaceName}</span>
         <span className="text-[#353B49]">/</span>
         <span className="font-medium text-ink-2">{pageTitle(pathname)}</span>
       </div>
@@ -57,8 +65,11 @@ export function Topbar({ notifications }: { notifications: Notification[] }) {
         ?
       </button>
 
-      <span className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-accent/30 bg-accent/18 text-[11px] font-semibold text-accent-soft">
-        E
+      <span
+        className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-accent/30 bg-accent/18 text-[11px] font-semibold text-accent-soft"
+        title={currentUser ? `${currentUser.name} · ${currentUser.email}` : "Demo session"}
+      >
+        {currentUser?.initials ?? "•"}
       </span>
 
       {notifOpen ? <NotificationsPopover notifications={notifications} /> : null}

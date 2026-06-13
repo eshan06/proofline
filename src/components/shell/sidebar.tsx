@@ -8,10 +8,22 @@ import { NAV_ITEMS } from "./nav-items";
 import { toast } from "@/stores/toasts";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import type { CurrentUser } from "@/lib/schemas";
 
-export function Sidebar() {
+export function Sidebar({
+  workspaceName,
+  currentUser,
+}: {
+  workspaceName: string;
+  currentUser: CurrentUser | null;
+}) {
   const pathname = usePathname();
   const router = useRouter();
+
+  const displayName = currentUser?.name ?? "Demo session";
+  const displayEmail = currentUser?.email ?? "Exploring Proofline";
+  const displayInit = currentUser?.initials ?? "•";
+  const planLabel = currentUser?.role ? `Proofline · ${currentUser.role}` : "Proofline · Demo";
 
   const logout = async () => {
     try {
@@ -32,8 +44,8 @@ export function Sidebar() {
       >
         <Logo size={26} />
         <span className="flex min-w-0 flex-col gap-px">
-          <span className="text-[13px] font-semibold tracking-[-0.01em] text-ink">Acme Inc</span>
-          <span className="text-[10.5px] text-muted">Proofline · Pro plan</span>
+          <span className="truncate text-[13px] font-semibold tracking-[-0.01em] text-ink">{workspaceName}</span>
+          <span className="text-[10.5px] text-muted">{planLabel}</span>
         </span>
         <span className="ml-auto text-[10px] text-muted">▾</span>
       </button>
@@ -80,11 +92,11 @@ export function Sidebar() {
         </Link>
         <div className="flex items-center gap-[9px] rounded-lg border border-white/6 bg-white/2 p-2 px-[9px]">
           <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-accent/18 text-[11px] font-semibold text-accent-soft">
-            E
+            {displayInit}
           </span>
           <span className="flex min-w-0 flex-col gap-px">
-            <span className="text-[12px] font-medium text-ink">Eshan Patel</span>
-            <span className="truncate text-[10.5px] text-muted">eshan@acme.io</span>
+            <span className="truncate text-[12px] font-medium text-ink">{displayName}</span>
+            <span className="truncate text-[10.5px] text-muted">{displayEmail}</span>
           </span>
           <span
             aria-label="Online"

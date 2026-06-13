@@ -64,9 +64,31 @@ export function rateLimit(key: string, limit: RateLimit, now = Date.now()): Rate
   return store.take(key, limit.capacity, limit.refillPerSec, now);
 }
 
-/** Derive a client key from request headers (best-effort IP). */
+/**
+ * Derive a client key from request headers, resistant to `x-forwarded-for`
+ * spoofing.
+ *
+ * `x-forwarded-for` is an attacker-appendable list: `client, proxy1, proxy2`.
+ * The *leftmost* entry is fully client-controlled (rotate it for a fresh
+ * bucket), so we never trust it blindly. Set `RATE_LIMIT_PROXY_HOPS` to the
+ * number of trusted proxies in front of the app (e.g. 1 for a single ALB /
+ * Vercel edge); we then read the entry that many hops from the right, which is
+ * the real client IP your own infrastructure observed. With no value set we
+ * fall back to the rightmost entry — the address our immediate upstream
+ * appended, which an external client cannot forge.
+ */
 export function clientKey(req: Request, scope: string): string {
-  const fwd = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const ip = fwd || req.headers.get("x-real-ip") || "unknown";
+  const hops = Number(process.env.RATE_LIMIT_PROXY_HOPS);
+  const xff = req.headers.get("x-forwarded-for");
+  let ip = "unknown";
+  if (xff) {
+    const parts = xff.split(",").map((p) => p.trim()).filter(Boolean);
+    if (parts.length) {
+      const fromRight = Number.isFinite(hops) && hops > 0 ? hops : 1;
+      ip = parts[Math.max(0, parts.length - fromRight)] ?? parts[parts.length - 1]!;
+    }
+  } else {
+    ip = req.headers.get("x-real-ip")?.trim() || "unknown";
+  }
   return `${scope}:${ip}`;
 }

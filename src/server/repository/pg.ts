@@ -3,6 +3,7 @@ import { getDb, type Db } from "@/server/db/client";
 import * as s from "@/server/db/schema";
 import type {
   AIDraft,
+  AuditEvent,
   Automation,
   AutomationRun,
   CopilotSettings,
@@ -17,8 +18,9 @@ import type {
   TicketPatch,
   Workspace,
 } from "@/lib/schemas";
-import { uid } from "@/lib/utils";
+import { uid, secureToken } from "@/lib/utils";
 import { seedWorkspaceData } from "./seed-data";
+import { buildWebTicket, newTicketRawId, ticketToTranscript, type WidgetTranscriptMessage } from "./web-ticket";
 import { NotFoundError, type Repository, type SessionInfo, type UserRecord } from "./types";
 
 const DEMO_TTL_MS = 30 * 60 * 1000;
@@ -29,6 +31,9 @@ const emptySteps = (): Record<DemoStep, boolean> => ({
   draft: false, send: false, upload: false, connect: false, palette: false,
 });
 
+/** The Drizzle client or a transaction handle — both expose insert/select/update. */
+type Executor = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
+
 /** Postgres-backed repository (Drizzle). Active when DATABASE_URL is set. */
 export class PgRepository implements Repository {
   private get db(): Db {
@@ -37,11 +42,16 @@ export class PgRepository implements Repository {
 
   /* seeding -------------------------------------------------------------- */
 
-  private async seedWorkspace(workspaceId: string, name: string): Promise<void> {
+  /**
+   * Insert the seed rows for a workspace via `exec` (the client or a
+   * transaction). Pure DB writes — no corpus embedding — so the caller can run
+   * it atomically inside a transaction.
+   */
+  private async seedWorkspaceRows(exec: Executor, workspaceId: string, name: string): Promise<void> {
     const d = seedWorkspaceData(name);
     const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workspace"}-${workspaceId.slice(-6)}`;
-    await this.db.insert(s.workspaces).values({ id: workspaceId, name: d.name, slug, plan: "Growth" });
-    await this.db.insert(s.copilotSettings).values({
+    await exec.insert(s.workspaces).values({ id: workspaceId, name: d.name, slug, plan: "Growth", widgetSiteKey: secureToken(16) });
+    await exec.insert(s.copilotSettings).values({
       workspaceId,
       tone: d.copilot.tone,
       risk: d.copilot.risk,
@@ -50,9 +60,9 @@ export class PgRepository implements Repository {
       neverSay: d.copilot.neverSay,
     });
     if (d.customers.length)
-      await this.db.insert(s.customers).values(d.customers.map((c) => ({ ...c, id: `${workspaceId}_${c.id}`, workspaceId })));
+      await exec.insert(s.customers).values(d.customers.map((c) => ({ ...c, id: `${workspaceId}_${c.id}`, workspaceId })));
     if (d.tickets.length)
-      await this.db.insert(s.tickets).values(
+      await exec.insert(s.tickets).values(
         d.tickets.map((t, i) => ({
           id: `${workspaceId}_${t.id}`,
           workspaceId,
@@ -78,11 +88,11 @@ export class PgRepository implements Repository {
         })),
       );
     if (d.kbDocs.length)
-      await this.db.insert(s.kbDocs).values(d.kbDocs.map((k, i) => ({ ...k, id: `${workspaceId}_${k.id}`, workspaceId, sortOrder: i })));
+      await exec.insert(s.kbDocs).values(d.kbDocs.map((k, i) => ({ ...k, id: `${workspaceId}_${k.id}`, workspaceId, sortOrder: i })));
     if (d.automations.length)
-      await this.db.insert(s.automations).values(d.automations.map((a, i) => ({ ...a, id: `${workspaceId}_${a.id}`, workspaceId, sortOrder: i })));
+      await exec.insert(s.automations).values(d.automations.map((a, i) => ({ ...a, id: `${workspaceId}_${a.id}`, workspaceId, sortOrder: i })));
     if (d.integrations.length)
-      await this.db.insert(s.integrations).values(
+      await exec.insert(s.integrations).values(
         d.integrations.map((g, i) => ({
           id: `${workspaceId}_${g.key}`,
           workspaceId,
@@ -99,12 +109,17 @@ export class PgRepository implements Repository {
         })),
       );
     if (d.audit.length)
-      await this.db.insert(s.auditEvents).values(d.audit.map((a) => ({ ...a, id: uid("au"), workspaceId })));
+      await exec.insert(s.auditEvents).values(d.audit.map((a) => ({ ...a, id: uid("au"), workspaceId })));
     if (d.notifications.length)
-      await this.db.insert(s.notifications).values(d.notifications.map((n, i) => ({ id: uid("nt"), workspaceId, color: n.c, text: n.text, time: n.time, sortOrder: i })));
+      await exec.insert(s.notifications).values(d.notifications.map((n, i) => ({ id: uid("nt"), workspaceId, color: n.c, text: n.text, time: n.time, sortOrder: i })));
+  }
 
-    // Embed the seed knowledge corpus so RAG retrieval is real from day one.
-    // Best-effort: a failure here must not block workspace creation.
+  /**
+   * Embed the seed knowledge corpus so RAG retrieval is real from day one.
+   * Best-effort and intentionally OUTSIDE any provisioning transaction: a slow
+   * or failed embedding must neither block nor roll back workspace creation.
+   */
+  private async ingestCorpusBestEffort(workspaceId: string): Promise<void> {
     try {
       const { ingestSeedCorpus } = await import("@/server/ai/rag");
       await ingestSeedCorpus(workspaceId);
@@ -113,10 +128,15 @@ export class PgRepository implements Repository {
     }
   }
 
+  private async seedWorkspace(workspaceId: string, name: string): Promise<void> {
+    await this.db.transaction((tx) => this.seedWorkspaceRows(tx, workspaceId, name));
+    await this.ingestCorpusBestEffort(workspaceId);
+  }
+
   /* sessions ------------------------------------------------------------- */
 
   async createSession(input: { type: "regular" | "demo"; userId?: string | null; workspaceId: string }): Promise<SessionInfo> {
-    const id = `${input.type === "demo" ? "demo" : "ws"}_${uid("s")}`;
+    const id = `${input.type === "demo" ? "demo" : "ws"}_${secureToken(18)}`;
     const ttl = input.type === "demo" ? DEMO_TTL_MS : REGULAR_TTL_MS;
     await this.db.insert(s.sessions).values({
       id,
@@ -173,15 +193,25 @@ export class PgRepository implements Repository {
 
   async createUserWithWorkspace(input: { email: string; name: string; passwordHash: string; workspaceName?: string }) {
     const user: UserRecord = { id: `u_${uid("u")}`, email: input.email.toLowerCase(), name: input.name, passwordHash: input.passwordHash };
-    await this.db.insert(s.users).values({ id: user.id, email: user.email, name: user.name, passwordHash: user.passwordHash });
     const workspaceId = `ws_${uid("w")}`;
-    await this.seedWorkspace(workspaceId, input.workspaceName ?? `${input.name}'s workspace`);
-    await this.db.insert(s.memberships).values({ userId: user.id, workspaceId, role: "Admin", status: "Active" });
+    // Atomic: user + seeded workspace + membership all commit together, so a
+    // mid-provision failure never leaves an orphaned user or a half-workspace.
+    await this.db.transaction(async (tx) => {
+      await tx.insert(s.users).values({ id: user.id, email: user.email, name: user.name, passwordHash: user.passwordHash });
+      await this.seedWorkspaceRows(tx, workspaceId, input.workspaceName ?? `${input.name}'s workspace`);
+      await tx.insert(s.memberships).values({ userId: user.id, workspaceId, role: "Admin", status: "Active" });
+    });
+    await this.ingestCorpusBestEffort(workspaceId);
     return { user, workspaceId };
   }
 
   async findUserByEmail(email: string): Promise<UserRecord | null> {
     const [row] = await this.db.select().from(s.users).where(eq(s.users.email, email.toLowerCase())).limit(1);
+    return row ? { id: row.id, email: row.email, name: row.name, passwordHash: row.passwordHash } : null;
+  }
+
+  async getUser(userId: string): Promise<UserRecord | null> {
+    const [row] = await this.db.select().from(s.users).where(eq(s.users.id, userId)).limit(1);
     return row ? { id: row.id, email: row.email, name: row.name, passwordHash: row.passwordHash } : null;
   }
 
@@ -265,6 +295,12 @@ export class PgRepository implements Repository {
       notifications: notif.map((n) => ({ c: n.color, text: n.text, time: n.time })),
       copilot,
       demo: { active: false, steps: emptySteps() },
+      currentUser: null,
+      widget: {
+        siteKey: wsRow.widgetSiteKey ?? "",
+        enabled: wsRow.widgetEnabled,
+        allowedOrigins: wsRow.widgetAllowedOrigins,
+      },
     };
   }
 
@@ -293,7 +329,7 @@ export class PgRepository implements Repository {
     return row ? rowToTicket(row) : null;
   }
 
-  async patchTicket(workspaceId: string, id: string, patch: TicketPatch): Promise<Ticket> {
+  async patchTicket(workspaceId: string, id: string, patch: TicketPatch, actor: string): Promise<Ticket> {
     const row = await this.loadTicket(workspaceId, id);
     if (!row) throw new NotFoundError(`Unknown ticket ${id}`);
     const t = rowToTicket(row);
@@ -304,10 +340,10 @@ export class PgRepository implements Repository {
       t.status = patch.status;
       if (patch.status === "escalated") {
         t.stage = "escalated";
-        t.messages.push({ id: uid("m"), kind: "status", time: "just now", text: "Escalated to engineering by Eshan · just now" });
+        t.messages.push({ id: uid("m"), kind: "status", time: "just now", text: `Escalated to engineering by ${actor} · just now` });
       } else if (patch.status === "closed") {
         t.stage = "resolved";
-        t.messages.push({ id: uid("m"), kind: "status", time: "just now", text: "Ticket closed by Eshan · just now" });
+        t.messages.push({ id: uid("m"), kind: "status", time: "just now", text: `Ticket closed by ${actor} · just now` });
       } else if (patch.status === "waiting") {
         t.stage = "waiting";
       }
@@ -316,11 +352,11 @@ export class PgRepository implements Repository {
     return t;
   }
 
-  async addReply(workspaceId: string, id: string, text: string, viaAI: boolean): Promise<Ticket> {
+  async addReply(workspaceId: string, id: string, text: string, viaAI: boolean, actor: string): Promise<Ticket> {
     const row = await this.loadTicket(workspaceId, id);
     if (!row) throw new NotFoundError(`Unknown ticket ${id}`);
     const t = rowToTicket(row);
-    t.messages.push({ id: uid("m"), kind: "agent", author: "Eshan", time: "just now", text, viaAI });
+    t.messages.push({ id: uid("m"), kind: "agent", author: actor, time: "just now", text, viaAI });
     t.status = "waiting";
     t.stage = "waiting";
     t.unread = false;
@@ -328,11 +364,11 @@ export class PgRepository implements Repository {
     return t;
   }
 
-  async addNote(workspaceId: string, id: string, text: string): Promise<Ticket> {
+  async addNote(workspaceId: string, id: string, text: string, actor: string): Promise<Ticket> {
     const row = await this.loadTicket(workspaceId, id);
     if (!row) throw new NotFoundError(`Unknown ticket ${id}`);
     const t = rowToTicket(row);
-    t.messages.push({ id: uid("m"), kind: "note", author: "Eshan", time: "just now", text });
+    t.messages.push({ id: uid("m"), kind: "note", author: actor, time: "just now", text });
     await this.saveTicket(workspaceId, t);
     return t;
   }
@@ -423,6 +459,96 @@ export class PgRepository implements Repository {
       ...(patch.neverSay && { neverSay: patch.neverSay }),
     }).where(eq(s.copilotSettings.workspaceId, workspaceId));
     return this.getCopilot(workspaceId);
+  }
+
+  async appendAudit(workspaceId: string, event: { user: string; action: string; type: AuditEvent["type"] }): Promise<void> {
+    await this.db.insert(s.auditEvents).values({ id: uid("au"), workspaceId, time: "just now", user: event.user, action: event.action, type: event.type });
+  }
+
+  /* website chat widget -------------------------------------------------- */
+
+  async resolveSiteKey(siteKey: string): Promise<{ workspaceId: string; allowedOrigins: string[] } | null> {
+    const [row] = await this.db.select().from(s.workspaces).where(eq(s.workspaces.widgetSiteKey, siteKey)).limit(1);
+    return row && row.widgetEnabled ? { workspaceId: row.id, allowedOrigins: row.widgetAllowedOrigins ?? [] } : null;
+  }
+
+  async startWidgetConversation(
+    workspaceId: string,
+    visitor: { name?: string; email?: string },
+    firstText: string,
+  ): Promise<{ token: string; ticketId: string }> {
+    const rawId = newTicketRawId();
+    const ticket = buildWebTicket(rawId, visitor, firstText);
+    await this.db.insert(s.tickets).values({
+      id: `${workspaceId}_${rawId}`,
+      workspaceId,
+      customer: ticket.customer,
+      channel: ticket.channel,
+      subject: ticket.subject,
+      preview: ticket.preview,
+      priority: ticket.priority,
+      tags: ticket.tags,
+      status: ticket.status,
+      stage: ticket.stage,
+      assignee: ticket.assignee,
+      slaMins: ticket.slaMins,
+      slaTotal: ticket.slaTotal,
+      unread: ticket.unread,
+      time: ticket.time,
+      conf: ticket.conf,
+      archived: ticket.archived,
+      messages: ticket.messages,
+      draft: ticket.draft,
+      sortOrder: -1,
+    });
+    const token = secureToken(24);
+    await this.db.insert(s.widgetConversations).values({
+      token,
+      workspaceId,
+      ticketId: `${workspaceId}_${rawId}`,
+      visitorName: visitor.name?.trim() || null,
+      visitorEmail: visitor.email?.trim() || null,
+    });
+    return { token, ticketId: rawId };
+  }
+
+  private async loadConvo(workspaceId: string, token: string) {
+    const [conv] = await this.db
+      .select()
+      .from(s.widgetConversations)
+      .where(and(eq(s.widgetConversations.token, token), eq(s.widgetConversations.workspaceId, workspaceId)))
+      .limit(1);
+    return conv;
+  }
+
+  async appendWidgetMessage(workspaceId: string, token: string, text: string): Promise<boolean> {
+    const conv = await this.loadConvo(workspaceId, token);
+    if (!conv) return false;
+    const [row] = await this.db
+      .select()
+      .from(s.tickets)
+      .where(and(eq(s.tickets.workspaceId, workspaceId), eq(s.tickets.id, conv.ticketId)))
+      .limit(1);
+    if (!row) return false;
+    const t = rowToTicket(row);
+    t.messages.push({ id: uid("m"), kind: "customer", author: conv.visitorName ?? t.customer.name, time: "just now", text });
+    t.status = "open";
+    t.stage = "new";
+    t.unread = true;
+    await this.saveTicket(workspaceId, t);
+    return true;
+  }
+
+  async getWidgetTranscript(workspaceId: string, token: string): Promise<WidgetTranscriptMessage[] | null> {
+    const conv = await this.loadConvo(workspaceId, token);
+    if (!conv) return null;
+    const [row] = await this.db
+      .select()
+      .from(s.tickets)
+      .where(and(eq(s.tickets.workspaceId, workspaceId), eq(s.tickets.id, conv.ticketId)))
+      .limit(1);
+    if (!row) return null;
+    return ticketToTranscript(rowToTicket(row).messages);
   }
 }
 

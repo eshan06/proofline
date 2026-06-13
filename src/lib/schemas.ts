@@ -269,6 +269,31 @@ export const demoStateSchema = z.object({
 export type DemoState = z.infer<typeof demoStateSchema>;
 
 /* ------------------------------------------------------------------ */
+/*  Signed-in user (overlaid onto the workspace payload per session)   */
+/* ------------------------------------------------------------------ */
+
+export const currentUserSchema = z.object({
+  name: z.string(),
+  email: z.string(),
+  initials: z.string(),
+  role: memberRoleSchema.nullable(),
+});
+export type CurrentUser = z.infer<typeof currentUserSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  Website chat widget                                                */
+/* ------------------------------------------------------------------ */
+
+export const widgetConfigSchema = z.object({
+  /** Public, non-secret tenant identifier embedded in the widget script. */
+  siteKey: z.string(),
+  enabled: z.boolean(),
+  /** Origins permitted to call the intake API (empty = allow any, dev-only). */
+  allowedOrigins: z.array(z.string()),
+});
+export type WidgetConfig = z.infer<typeof widgetConfigSchema>;
+
+/* ------------------------------------------------------------------ */
 /*  Workspace payload (GET /api/workspace)                             */
 /* ------------------------------------------------------------------ */
 
@@ -284,6 +309,9 @@ export const workspaceSchema = z.object({
   notifications: z.array(notificationSchema),
   copilot: copilotSettingsSchema,
   demo: demoStateSchema,
+  /** The signed-in user, or null for demo / anonymous sessions. */
+  currentUser: currentUserSchema.nullable(),
+  widget: widgetConfigSchema,
 });
 export type Workspace = z.infer<typeof workspaceSchema>;
 
@@ -348,3 +376,29 @@ export const eventSchema = z.object({
   name: z.string().min(1),
   props: z.record(z.string(), z.unknown()).optional(),
 });
+
+/* ------------------------------------------------------------------ */
+/*  Widget intake (public, unauthenticated)                            */
+/* ------------------------------------------------------------------ */
+
+export const widgetMessageSchema = z.object({
+  /** Omitted on the first message — the server mints a conversation token. */
+  conversationId: z.string().optional(),
+  text: z.string().min(1).max(4000),
+  visitor: z
+    .object({ name: z.string().max(120).optional(), email: z.string().email().optional() })
+    .optional(),
+});
+
+/** What the widget polls for: the visitor-facing transcript of a conversation. */
+export const widgetTranscriptSchema = z.object({
+  conversationId: z.string(),
+  messages: z.array(
+    z.object({
+      role: z.enum(["visitor", "agent"]),
+      text: z.string(),
+      time: z.string(),
+    }),
+  ),
+});
+export type WidgetTranscript = z.infer<typeof widgetTranscriptSchema>;

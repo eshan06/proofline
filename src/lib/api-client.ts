@@ -41,7 +41,18 @@ export const api = {
   draftAction: (id: string, action: DraftAction) =>
     request(`/api/tickets/${id}/draft`, { method: "POST", body: JSON.stringify(action) }),
 
-  uploadKbDoc: () => request("/api/kb/upload", { method: "POST" }),
+  // No file → canned demo doc (preserves the guided demo). A File → real
+  // multipart upload + ingestion. FormData sets its own content-type boundary,
+  // so we call fetch directly rather than the JSON `request` helper.
+  uploadKbDoc: async (file?: File) => {
+    if (!file) return request("/api/kb/upload", { method: "POST" });
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/kb/upload", { method: "POST", body: fd });
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) throw new ApiClientError(res.status, body.error ?? `Upload failed (${res.status})`);
+    return body;
+  },
 
   retryKbDoc: (id: string) => request(`/api/kb/${id}/retry`, { method: "POST" }),
 

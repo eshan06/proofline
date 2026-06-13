@@ -30,7 +30,28 @@ export function slaColor(slaMins: number): string {
 }
 
 let idCounter = 0;
+/**
+ * Sequential id for *domain* entities (messages, kb docs, automations). These
+ * are always workspace-scoped and never used as a bearer credential, so a
+ * readable monotonic id is fine. For anything that authenticates a request
+ * (session ids, reset/CSRF tokens) use {@link secureToken} instead.
+ */
 export function uid(prefix = "id"): string {
   idCounter += 1;
   return `${prefix}_${Date.now().toString(36)}_${idCounter}`;
+}
+
+/**
+ * Cryptographically-random, unguessable token. Used for everything that is a
+ * bearer credential — session ids, password-reset tokens, widget conversation
+ * keys, CSRF tokens. Uses the Web Crypto global (`crypto.getRandomValues`),
+ * which is present in the Node, edge, and browser runtimes, so this module
+ * stays import-free and bundles cleanly on the client.
+ */
+export function secureToken(bytes = 32): string {
+  const arr = new Uint8Array(bytes);
+  crypto.getRandomValues(arr);
+  let out = "";
+  for (const b of arr) out += b.toString(16).padStart(2, "0");
+  return out;
 }

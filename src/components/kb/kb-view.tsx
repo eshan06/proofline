@@ -30,7 +30,9 @@ export function KbView() {
   const { data: ws } = useWorkspace();
   const docs = useMemo(() => ws?.kbDocs ?? [], [ws?.kbDocs]);
   const uploadingRef = useRef(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
+  // Canned demo upload (guided demo / ?upload=1 / palette) — no real file.
   const upload = async () => {
     if (uploadingRef.current) return;
     uploadingRef.current = true;
@@ -40,6 +42,22 @@ export function KbView() {
       await queryClient.invalidateQueries({ queryKey: WORKSPACE_KEY });
     } finally {
       uploadingRef.current = false;
+    }
+  };
+
+  // Real upload: parse + index the selected file's text into the knowledge base.
+  const onFilePicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    toast(`Uploading “${file.name}”…`);
+    try {
+      const doc = (await api.uploadKbDoc(file)) as KbDoc;
+      await queryClient.invalidateQueries({ queryKey: WORKSPACE_KEY });
+      if (doc.status === "indexed") toast(`Indexed “${doc.name}” — ${doc.chunks} chunks`);
+      else if (doc.status === "failed") toast(`Couldn't index “${doc.name}”`);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Upload failed");
     }
   };
 
@@ -88,9 +106,16 @@ export function KbView() {
           >
             Add URL
           </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".txt,.text,.md,.markdown,.csv,.tsv,.json,.log,.rst,.html,.htm,.xml,text/*,application/json"
+            className="hidden"
+            onChange={onFilePicked}
+          />
           <button
             type="button"
-            onClick={() => void upload()}
+            onClick={() => fileRef.current?.click()}
             className="flex items-center gap-1.5 rounded-[7px] border-0 bg-accent px-[13px] py-[7px] text-[12px] font-semibold text-white hover:bg-accent-hover"
             style={{ boxShadow: "0 2px 12px rgba(77,124,254,0.3)" }}
           >

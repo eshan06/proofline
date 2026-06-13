@@ -1,5 +1,6 @@
 import type {
   AIDraft,
+  AuditEvent,
   Automation,
   AutomationRun,
   CopilotSettings,
@@ -14,8 +15,9 @@ import type {
   TicketPatch,
   Workspace,
 } from "@/lib/schemas";
-import { uid } from "@/lib/utils";
+import { uid, secureToken } from "@/lib/utils";
 import { seedWorkspaceData, type WorkspaceData } from "./seed-data";
+import { buildWebTicket, newTicketRawId, ticketToTranscript, type WidgetTranscriptMessage } from "./web-ticket";
 import {
   NotFoundError,
   type Repository,
@@ -37,11 +39,19 @@ interface MemSession extends SessionInfo {
  * original store: per-workspace data seeded from fixtures, sessions with TTL +
  * AI budget. Survives Next.js dev reloads via a global.
  */
+interface WidgetConvo {
+  workspaceId: string;
+  ticketId: string;
+  visitorName: string | null;
+  visitorEmail: string | null;
+}
+
 export class MemoryRepository implements Repository {
   private sessions: Map<string, MemSession>;
   private workspaces: Map<string, WorkspaceData>;
   private users: Map<string, UserRecord>;
   private memberships: { userId: string; workspaceId: string; role: MemberRole }[];
+  private widgetConvos: Map<string, WidgetConvo>;
 
   constructor() {
     const g = globalThis as unknown as {
@@ -50,15 +60,17 @@ export class MemoryRepository implements Repository {
         workspaces: Map<string, WorkspaceData>;
         users: Map<string, UserRecord>;
         memberships: { userId: string; workspaceId: string; role: MemberRole }[];
+        widgetConvos: Map<string, WidgetConvo>;
       };
     };
     if (!g.__plMem) {
-      g.__plMem = { sessions: new Map(), workspaces: new Map(), users: new Map(), memberships: [] };
+      g.__plMem = { sessions: new Map(), workspaces: new Map(), users: new Map(), memberships: [], widgetConvos: new Map() };
     }
     this.sessions = g.__plMem.sessions;
     this.workspaces = g.__plMem.workspaces;
     this.users = g.__plMem.users;
     this.memberships = g.__plMem.memberships;
+    this.widgetConvos = g.__plMem.widgetConvos;
   }
 
   private ws(workspaceId: string): WorkspaceData {
@@ -82,7 +94,7 @@ export class MemoryRepository implements Repository {
   async createSession(input: { type: "regular" | "demo"; userId?: string | null; workspaceId: string }): Promise<SessionInfo> {
     this.sweep();
     const rec: MemSession = {
-      id: `${input.type === "demo" ? "demo" : "ws"}_${uid("s")}`,
+      id: `${input.type === "demo" ? "demo" : "ws"}_${secureToken(18)}`,
       type: input.type,
       userId: input.userId ?? null,
       workspaceId: input.workspaceId,
@@ -128,7 +140,11 @@ export class MemoryRepository implements Repository {
   async consumeAiCall(sessionId: string): Promise<boolean> {
     const rec = this.sessions.get(sessionId);
     if (!rec) return true;
-    if (rec.type === "demo" && rec.aiCalls >= DEMO_AI_CALL_LIMIT) return false;
+    // The in-memory repo is the dev/demo/test backend only (production always
+    // has DATABASE_URL → PgRepository). Cap AI usage for EVERY session here, not
+    // just demo ones: otherwise a reseeded `ws_` cookie (see getSession) would
+    // be treated as a `regular` session and get unbounded, free inference.
+    if (rec.aiCalls >= DEMO_AI_CALL_LIMIT) return false;
     rec.aiCalls += 1;
     return true;
   }
@@ -173,6 +189,11 @@ export class MemoryRepository implements Repository {
     return this.users.get(email.toLowerCase()) ?? null;
   }
 
+  async getUser(userId: string): Promise<UserRecord | null> {
+    for (const u of this.users.values()) if (u.id === userId) return u;
+    return null;
+  }
+
   async membershipRole(userId: string, workspaceId: string): Promise<MemberRole | null> {
     return this.memberships.find((m) => m.userId === userId && m.workspaceId === workspaceId)?.role ?? null;
   }
@@ -203,6 +224,8 @@ export class MemoryRepository implements Repository {
       notifications: d.notifications,
       copilot: d.copilot,
       demo: { active: false, steps: { draft: false, send: false, upload: false, connect: false, palette: false } },
+      currentUser: null,
+      widget: d.widget,
     };
   }
 
@@ -226,7 +249,7 @@ export class MemoryRepository implements Repository {
     t.messages.push({ id: uid("m"), time: msg.time ?? "just now", ...msg });
   }
 
-  async patchTicket(workspaceId: string, id: string, patch: TicketPatch): Promise<Ticket> {
+  async patchTicket(workspaceId: string, id: string, patch: TicketPatch, actor: string): Promise<Ticket> {
     const t = this.ticket(workspaceId, id);
     if (patch.priority) t.priority = patch.priority;
     if (patch.assignee !== undefined) t.assignee = patch.assignee;
@@ -235,10 +258,10 @@ export class MemoryRepository implements Repository {
       t.status = patch.status;
       if (patch.status === "escalated") {
         t.stage = "escalated";
-        this.append(t, { kind: "status", text: "Escalated to engineering by Eshan · just now" });
+        this.append(t, { kind: "status", text: `Escalated to engineering by ${actor} · just now` });
       } else if (patch.status === "closed") {
         t.stage = "resolved";
-        this.append(t, { kind: "status", text: "Ticket closed by Eshan · just now" });
+        this.append(t, { kind: "status", text: `Ticket closed by ${actor} · just now` });
       } else if (patch.status === "waiting") {
         t.stage = "waiting";
       }
@@ -246,18 +269,18 @@ export class MemoryRepository implements Repository {
     return t;
   }
 
-  async addReply(workspaceId: string, id: string, text: string, viaAI: boolean): Promise<Ticket> {
+  async addReply(workspaceId: string, id: string, text: string, viaAI: boolean, actor: string): Promise<Ticket> {
     const t = this.ticket(workspaceId, id);
-    this.append(t, { kind: "agent", author: "Eshan", text, viaAI });
+    this.append(t, { kind: "agent", author: actor, text, viaAI });
     t.status = "waiting";
     t.stage = "waiting";
     t.unread = false;
     return t;
   }
 
-  async addNote(workspaceId: string, id: string, text: string): Promise<Ticket> {
+  async addNote(workspaceId: string, id: string, text: string, actor: string): Promise<Ticket> {
     const t = this.ticket(workspaceId, id);
-    this.append(t, { kind: "note", author: "Eshan", text });
+    this.append(t, { kind: "note", author: actor, text });
     return t;
   }
 
@@ -341,5 +364,57 @@ export class MemoryRepository implements Repository {
     const d = this.ws(workspaceId);
     d.copilot = { ...d.copilot, ...patch };
     return d.copilot;
+  }
+
+  async appendAudit(workspaceId: string, event: { user: string; action: string; type: AuditEvent["type"] }): Promise<void> {
+    this.ws(workspaceId).audit.unshift({ time: "just now", user: event.user, action: event.action, type: event.type });
+  }
+
+  /* website chat widget -------------------------------------------------- */
+
+  async resolveSiteKey(siteKey: string): Promise<{ workspaceId: string; allowedOrigins: string[] } | null> {
+    for (const [wsId, d] of this.workspaces) {
+      if (d.widget.siteKey === siteKey && d.widget.enabled) {
+        return { workspaceId: wsId, allowedOrigins: d.widget.allowedOrigins };
+      }
+    }
+    return null;
+  }
+
+  async startWidgetConversation(
+    workspaceId: string,
+    visitor: { name?: string; email?: string },
+    firstText: string,
+  ): Promise<{ token: string; ticketId: string }> {
+    const ticket = buildWebTicket(newTicketRawId(), visitor, firstText);
+    this.ws(workspaceId).tickets.unshift(ticket);
+    const token = secureToken(24);
+    this.widgetConvos.set(token, {
+      workspaceId,
+      ticketId: ticket.id,
+      visitorName: visitor.name?.trim() || null,
+      visitorEmail: visitor.email?.trim() || null,
+    });
+    return { token, ticketId: ticket.id };
+  }
+
+  async appendWidgetMessage(workspaceId: string, token: string, text: string): Promise<boolean> {
+    const conv = this.widgetConvos.get(token);
+    if (!conv || conv.workspaceId !== workspaceId) return false;
+    const t = this.ws(workspaceId).tickets.find((x) => x.id === conv.ticketId);
+    if (!t) return false;
+    this.append(t, { kind: "customer", author: conv.visitorName ?? t.customer.name, text });
+    t.status = "open";
+    t.stage = "new";
+    t.unread = true;
+    return true;
+  }
+
+  async getWidgetTranscript(workspaceId: string, token: string): Promise<WidgetTranscriptMessage[] | null> {
+    const conv = this.widgetConvos.get(token);
+    if (!conv || conv.workspaceId !== workspaceId) return null;
+    const t = this.ws(workspaceId).tickets.find((x) => x.id === conv.ticketId);
+    if (!t) return null;
+    return ticketToTranscript(t.messages);
   }
 }

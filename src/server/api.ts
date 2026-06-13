@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { ZodSchema } from "zod";
 import { currentSession } from "@/server/session";
-import { NotFoundError, type SessionInfo } from "@/server/repository";
+import { NotFoundError, repo, type SessionInfo } from "@/server/repository";
 import { logger } from "@/server/logger";
 import { clientKey, rateLimit, type RateLimit } from "@/server/rate-limit";
 
@@ -20,6 +20,18 @@ export async function requireSession(): Promise<SessionInfo> {
   const session = await currentSession();
   if (!session) throw new ApiError(401, "No active session — sign in or open the demo.");
   return session;
+}
+
+/**
+ * Display name to attribute an action to (message author, "closed by …" status
+ * lines). The real signed-in user when there is one; for demo/anonymous
+ * sessions we fall back to "Eshan", the persona the seed fixtures are authored
+ * under, so the demo stays visually consistent.
+ */
+export async function actorName(session: SessionInfo): Promise<string> {
+  if (!session.userId) return "Eshan";
+  const user = await repo().getUser(session.userId);
+  return user?.name ?? "Eshan";
 }
 
 /** Throw 429 when the caller exceeds the named limit (keyed by client IP). */

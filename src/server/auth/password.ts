@@ -31,3 +31,17 @@ export async function verifyPassword(password: string, stored: string): Promise<
   const actual = await scryptAsync(password, salt);
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
+
+// A well-formed hash to verify against when no account exists, so the
+// no-such-user path performs the same scrypt work as a real check. Without
+// this, login response time leaks whether an email is registered (enumeration).
+const DUMMY_HASH = `scrypt$${"00".repeat(16)}$${"00".repeat(KEYLEN)}`;
+
+/** Run a throwaway verification to equalize timing on the no-such-user path. */
+export async function dummyVerify(password: string): Promise<void> {
+  try {
+    await verifyPassword(password, DUMMY_HASH);
+  } catch {
+    /* timing only — result discarded */
+  }
+}
