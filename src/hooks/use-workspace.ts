@@ -19,6 +19,13 @@ export function useWorkspace(initialData?: Workspace) {
     queryKey: WORKSPACE_KEY,
     queryFn: api.workspace,
     initialData,
+    // The whole app reads this one query. Without a staleTime, every left-nav
+    // tab change remounts a consumer and refetches the entire workspace
+    // (a heavy DB query in Postgres mode), which made navigation feel sluggish.
+    // Mutations already update the cache optimistically and invalidate on
+    // settle, so a 30s window keeps tab switches instant without going stale.
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 }
 

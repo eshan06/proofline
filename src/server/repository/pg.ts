@@ -1,4 +1,4 @@
-import { and, eq, asc } from "drizzle-orm";
+import { and, eq, asc, inArray } from "drizzle-orm";
 import { getDb, type Db } from "@/server/db/client";
 import * as s from "@/server/db/schema";
 import type {
@@ -341,14 +341,19 @@ export class PgRepository implements Repository {
       db.select().from(s.copilotSettings).where(eq(s.copilotSettings.workspaceId, workspaceId)).limit(1),
     ]);
 
-    // Members: real memberships joined to users, falling back to seed display members.
-    const memberRows = await Promise.all(
-      mem.map(async (m) => {
-        const [u] = await db.select().from(s.users).where(eq(s.users.id, m.userId)).limit(1);
-        const name = u?.name ?? m.invitedEmail?.split("@")[0] ?? "Member";
-        return { name, email: u?.email ?? m.invitedEmail ?? "", role: m.role as MemberRole, init: name.charAt(0).toUpperCase(), status: m.status as "Active" | "Invited" };
-      }),
-    );
+    // Members: real memberships joined to users. Batch the user lookup into one
+    // query (was N+1 — one round-trip per member, a real latency cost in the
+    // per-navigation workspace fetch).
+    const memberUserIds = mem.map((m) => m.userId);
+    const memberUsers = memberUserIds.length
+      ? await db.select().from(s.users).where(inArray(s.users.id, memberUserIds))
+      : [];
+    const usersById = new Map(memberUsers.map((u) => [u.id, u]));
+    const memberRows = mem.map((m) => {
+      const u = usersById.get(m.userId);
+      const name = u?.name ?? m.invitedEmail?.split("@")[0] ?? "Member";
+      return { name, email: u?.email ?? m.invitedEmail ?? "", role: m.role as MemberRole, init: name.charAt(0).toUpperCase(), status: m.status as "Active" | "Invited" };
+    });
     const seedMembers = seedWorkspaceData().members;
 
     const copilot = cop[0]
