@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { slack, slackRedirectUri } from "@/server/slack/slack";
@@ -29,7 +30,9 @@ export async function GET(req: Request) {
   };
 
   if (url.searchParams.get("error")) return done("denied");
-  if (!code || !state || !expected || state !== expected) return done("error");
+  const stateOk =
+    !!state && !!expected && state.length === expected.length && crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expected));
+  if (!code || !stateOk) return done("error");
 
   try {
     const account = await slack().exchangeCode(code, slackRedirectUri());

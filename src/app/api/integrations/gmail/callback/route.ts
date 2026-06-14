@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { gmail } from "@/server/email/gmail";
@@ -29,7 +30,9 @@ export async function GET(req: Request) {
   };
 
   if (url.searchParams.get("error")) return done("denied"); // user declined consent
-  if (!code || !state || !expected || state !== expected) return done("error");
+  const stateOk =
+    !!state && !!expected && state.length === expected.length && crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expected));
+  if (!code || !stateOk) return done("error");
 
   try {
     const { refreshToken, email } = await gmail().exchangeCode(code);

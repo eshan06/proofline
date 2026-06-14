@@ -103,8 +103,8 @@ class DisabledSlackProvider implements SlackProvider {
   verifyRequest(): boolean {
     return false;
   }
-  async resolveUserName(): Promise<string> {
-    return "";
+  async resolveUserName(_botToken: string, userId: string): Promise<string> {
+    return userId; // graceful fallback, consistent with the real provider
   }
 }
 
@@ -150,7 +150,10 @@ class RealSlackProvider implements SlackProvider {
       team?: { id: string; name: string };
     };
     if (!data.ok || !data.access_token) throw new Error(`Slack oauth.v2.access failed: ${data.error ?? "unknown"}`);
-    return { botToken: data.access_token, teamId: data.team?.id ?? "", teamName: data.team?.name ?? "" };
+    // Fail loud rather than store an empty teamId — that would silently break
+    // resolveSlackWorkspace() and drop every inbound event for this install.
+    if (!data.team?.id) throw new Error("Slack oauth.v2.access returned no team id.");
+    return { botToken: data.access_token, teamId: data.team.id, teamName: data.team.name ?? "" };
   }
 
   async postReply(input: { botToken: string; channel: string; threadTs: string; text: string }): Promise<{ ts: string }> {
@@ -160,9 +163,9 @@ class RealSlackProvider implements SlackProvider {
       body: JSON.stringify({ channel: input.channel, thread_ts: input.threadTs, text: input.text }),
     });
     const data = (await res.json()) as { ok: boolean; error?: string; ts?: string };
-    if (!data.ok) throw new Error(`Slack chat.postMessage failed: ${data.error ?? "unknown"}`);
+    if (!data.ok || !data.ts) throw new Error(`Slack chat.postMessage failed: ${data.error ?? "no ts"}`);
     logger.info("slack.sent", { channel: input.channel, threadTs: input.threadTs });
-    return { ts: data.ts ?? "" };
+    return { ts: data.ts };
   }
 
   verifyRequest(rawBody: string, timestamp: string | null, signature: string | null): boolean {
