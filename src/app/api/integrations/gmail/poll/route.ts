@@ -47,12 +47,19 @@ export async function POST(req: Request) {
     const inbound = await g.listInbound({ refreshToken: account.refreshToken });
     let created = 0;
     let appended = 0;
+    let failed = 0;
     for (const email of inbound) {
-      const res = await repo().ingestInboundEmail(workspaceId, email);
-      if (res.created) created += 1;
-      else if (!res.duplicate) appended += 1;
+      try {
+        const res = await repo().ingestInboundEmail(workspaceId, email);
+        if (res.created) created += 1;
+        else if (!res.duplicate) appended += 1;
+      } catch (err) {
+        // One bad message must not abort the rest of the batch.
+        failed += 1;
+        logger.reportError("gmail.ingest_failed", err, { workspaceId, messageId: email.messageId });
+      }
     }
-    logger.info("gmail.polled", { workspaceId, polled: inbound.length, created, appended });
-    return { polled: inbound.length, created, appended };
+    logger.info("gmail.polled", { workspaceId, polled: inbound.length, created, appended, failed });
+    return { polled: inbound.length, created, appended, failed };
   });
 }

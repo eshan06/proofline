@@ -151,6 +151,16 @@ export interface Repository {
   setDraft(workspaceId: string, id: string, draft: AIDraft): Promise<Ticket>;
   /** Persist the full mutated ticket (e.g. after automations change tags/status). */
   saveTicket(workspaceId: string, ticket: Ticket): Promise<void>;
+  /**
+   * Persist only the named scalar/array fields, leaving messages + draft as they
+   * currently are. Use after a slow step (AI drafting) when a blind full-ticket
+   * save would risk clobbering a message that arrived meanwhile.
+   */
+  saveTicketFields(
+    workspaceId: string,
+    id: string,
+    fields: Partial<Pick<Ticket, "priority" | "assignee" | "tags" | "status" | "stage" | "unread">>,
+  ): Promise<void>;
 
   /* knowledge base */
   addKbDoc(workspaceId: string, doc: Omit<KbDoc, "id">): Promise<KbDoc>;

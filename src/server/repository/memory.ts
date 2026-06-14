@@ -416,6 +416,15 @@ export class MemoryRepository implements Repository {
     if (t && t !== ticket) Object.assign(t, ticket);
   }
 
+  async saveTicketFields(
+    workspaceId: string,
+    id: string,
+    fields: Partial<Pick<Ticket, "priority" | "assignee" | "tags" | "status" | "stage" | "unread">>,
+  ): Promise<void> {
+    const t = this.ws(workspaceId).tickets.find((x) => x.id === id);
+    if (t) Object.assign(t, fields);
+  }
+
   /* knowledge base ------------------------------------------------------- */
 
   async addKbDoc(workspaceId: string, doc: Omit<KbDoc, "id">): Promise<KbDoc> {

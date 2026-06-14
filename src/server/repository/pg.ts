@@ -455,67 +455,99 @@ export class PgRepository implements Repository {
     return row ? rowToTicket(row) : null;
   }
 
+  /**
+   * Serialize a read-modify-write on one ticket. The row is SELECT … FOR UPDATE'd
+   * inside a transaction so concurrent writers (two agent replies, an inbound
+   * email append racing a reply, a widget message racing a reply) can't clobber
+   * each other's appended messages — the classic lost-update on the jsonb array.
+   * The lock is held until the UPDATE commits.
+   */
+  private async mutateTicket(workspaceId: string, id: string, mutate: (t: Ticket) => void): Promise<Ticket> {
+    const fullId = `${workspaceId}_${id}`;
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(s.tickets)
+        .where(and(eq(s.tickets.workspaceId, workspaceId), eq(s.tickets.id, fullId)))
+        .for("update")
+        .limit(1);
+      if (!row) throw new NotFoundError(`Unknown ticket ${id}`);
+      const t = rowToTicket(row);
+      mutate(t);
+      await tx
+        .update(s.tickets)
+        .set({
+          priority: t.priority, assignee: t.assignee, tags: t.tags, status: t.status, stage: t.stage,
+          unread: t.unread, messages: t.messages, draft: t.draft,
+        })
+        .where(and(eq(s.tickets.workspaceId, workspaceId), eq(s.tickets.id, fullId)));
+      return t;
+    });
+  }
+
   async patchTicket(workspaceId: string, id: string, patch: TicketPatch, actor: string): Promise<Ticket> {
-    const row = await this.loadTicket(workspaceId, id);
-    if (!row) throw new NotFoundError(`Unknown ticket ${id}`);
-    const t = rowToTicket(row);
-    if (patch.priority) t.priority = patch.priority;
-    if (patch.assignee !== undefined) t.assignee = patch.assignee;
-    if (patch.addTag && !t.tags.includes(patch.addTag)) t.tags.push(patch.addTag);
-    if (patch.status) {
-      t.status = patch.status;
-      if (patch.status === "escalated") {
-        t.stage = "escalated";
-        t.messages.push({ id: uid("m"), kind: "status", time: "just now", text: `Escalated to engineering by ${actor} · just now` });
-      } else if (patch.status === "closed") {
-        t.stage = "resolved";
-        t.messages.push({ id: uid("m"), kind: "status", time: "just now", text: `Ticket closed by ${actor} · just now` });
-      } else if (patch.status === "waiting") {
-        t.stage = "waiting";
+    return this.mutateTicket(workspaceId, id, (t) => {
+      if (patch.priority) t.priority = patch.priority;
+      if (patch.assignee !== undefined) t.assignee = patch.assignee;
+      if (patch.addTag && !t.tags.includes(patch.addTag)) t.tags.push(patch.addTag);
+      if (patch.status) {
+        t.status = patch.status;
+        if (patch.status === "escalated") {
+          t.stage = "escalated";
+          t.messages.push({ id: uid("m"), kind: "status", time: "just now", text: `Escalated to engineering by ${actor} · just now` });
+        } else if (patch.status === "closed") {
+          t.stage = "resolved";
+          t.messages.push({ id: uid("m"), kind: "status", time: "just now", text: `Ticket closed by ${actor} · just now` });
+        } else if (patch.status === "waiting") {
+          t.stage = "waiting";
+        }
       }
-    }
-    await this.saveTicket(workspaceId, t);
-    return t;
+    });
   }
 
   async addReply(workspaceId: string, id: string, text: string, viaAI: boolean, actor: string): Promise<Ticket> {
-    const row = await this.loadTicket(workspaceId, id);
-    if (!row) throw new NotFoundError(`Unknown ticket ${id}`);
-    const t = rowToTicket(row);
-    t.messages.push({ id: uid("m"), kind: "agent", author: actor, time: "just now", text, viaAI });
-    t.status = "waiting";
-    t.stage = "waiting";
-    t.unread = false;
-    await this.saveTicket(workspaceId, t);
-    return t;
+    return this.mutateTicket(workspaceId, id, (t) => {
+      t.messages.push({ id: uid("m"), kind: "agent", author: actor, time: "just now", text, viaAI });
+      t.status = "waiting";
+      t.stage = "waiting";
+      t.unread = false;
+    });
   }
 
   async addNote(workspaceId: string, id: string, text: string, actor: string): Promise<Ticket> {
-    const row = await this.loadTicket(workspaceId, id);
-    if (!row) throw new NotFoundError(`Unknown ticket ${id}`);
-    const t = rowToTicket(row);
-    t.messages.push({ id: uid("m"), kind: "note", author: actor, time: "just now", text });
-    await this.saveTicket(workspaceId, t);
-    return t;
+    return this.mutateTicket(workspaceId, id, (t) => {
+      t.messages.push({ id: uid("m"), kind: "note", author: actor, time: "just now", text });
+    });
   }
 
   async setDraft(workspaceId: string, id: string, draft: AIDraft): Promise<Ticket> {
-    const row = await this.loadTicket(workspaceId, id);
-    if (!row) throw new NotFoundError(`Unknown ticket ${id}`);
-    const t = rowToTicket(row);
-    t.draft = draft;
-    await this.saveTicket(workspaceId, t);
-    return t;
+    return this.mutateTicket(workspaceId, id, (t) => {
+      t.draft = draft;
+    });
+  }
+
+  /**
+   * Persist only scalar/array fields, preserving messages + draft as currently in
+   * the DB. Used after automations mutate tags/status/stage so a slow upstream
+   * step (e.g. AI drafting) can't write a stale messages snapshot over a reply
+   * that arrived in the meantime. Locked like every other ticket mutation.
+   */
+  async saveTicketFields(workspaceId: string, id: string, fields: Partial<Pick<Ticket, "priority" | "assignee" | "tags" | "status" | "stage" | "unread">>): Promise<void> {
+    await this.mutateTicket(workspaceId, id, (t) => {
+      Object.assign(t, fields);
+    });
   }
 
   async saveTicket(workspaceId: string, t: Ticket): Promise<void> {
-    await this.db
-      .update(s.tickets)
-      .set({
-        priority: t.priority, assignee: t.assignee, tags: t.tags, status: t.status, stage: t.stage,
-        unread: t.unread, messages: t.messages, draft: t.draft,
-      })
-      .where(and(eq(s.tickets.workspaceId, workspaceId), eq(s.tickets.id, `${workspaceId}_${t.id}`)));
+    await this.mutateTicket(workspaceId, t.id, (cur) => {
+      // Re-apply the full ticket state, but keep the messages currently in the DB
+      // and merge in any new ones (by id) so a blind overwrite can't drop a
+      // concurrently-appended message.
+      const ids = new Set(cur.messages.map((m) => m.id));
+      const merged = [...cur.messages, ...t.messages.filter((m) => !ids.has(m.id))];
+      Object.assign(cur, t);
+      cur.messages = merged;
+    });
   }
 
   /* knowledge base ------------------------------------------------------- */
@@ -713,76 +745,100 @@ export class PgRepository implements Repository {
   }
 
   async ingestInboundEmail(workspaceId: string, email: InboundEmail): Promise<InboundEmailResult> {
-    const [thread] = await this.db
-      .select()
-      .from(s.emailThreads)
-      .where(and(eq(s.emailThreads.workspaceId, workspaceId), eq(s.emailThreads.gmailThreadId, email.threadId)))
-      .limit(1);
+    // One transaction so a new-thread create and a same-thread append can't race
+    // (push email + a Pub/Sub push delivering the same/overlapping message). The
+    // thread row is the synchronization point: created with ON CONFLICT DO
+    // NOTHING, locked FOR UPDATE on append, so dedup + message writes are serial.
+    return this.db.transaction(async (tx) => {
+      const appendTo = async (thread: typeof s.emailThreads.$inferSelect): Promise<InboundEmailResult> => {
+        const publicId = stripPrefix(thread.ticketId, workspaceId);
+        if (email.messageId && thread.seenMessageIds.includes(email.messageId)) {
+          return { ticketId: publicId, created: false, duplicate: true };
+        }
+        const [row] = await tx
+          .select()
+          .from(s.tickets)
+          .where(and(eq(s.tickets.workspaceId, workspaceId), eq(s.tickets.id, thread.ticketId)))
+          .for("update")
+          .limit(1);
+        if (row) {
+          const t = rowToTicket(row);
+          t.messages.push({ id: uid("m"), kind: "customer", author: email.fromName || t.customer.name, time: "just now", text: email.body });
+          t.status = "open";
+          t.stage = "new";
+          t.unread = true;
+          await tx.update(s.tickets).set({ status: t.status, stage: t.stage, unread: t.unread, messages: t.messages })
+            .where(and(eq(s.tickets.workspaceId, workspaceId), eq(s.tickets.id, thread.ticketId)));
+        }
+        if (email.messageId) {
+          await tx.update(s.emailThreads)
+            .set({ lastInboundMessageId: email.messageId, seenMessageIds: [...thread.seenMessageIds, email.messageId] })
+            .where(and(eq(s.emailThreads.workspaceId, workspaceId), eq(s.emailThreads.gmailThreadId, email.threadId)));
+        }
+        return { ticketId: publicId, created: false, duplicate: false };
+      };
 
-    if (thread) {
-      const publicId = stripPrefix(thread.ticketId, workspaceId);
-      if (email.messageId && thread.seenMessageIds.includes(email.messageId)) {
-        return { ticketId: publicId, created: false, duplicate: true };
-      }
-      const [row] = await this.db
+      const [existing] = await tx
         .select()
-        .from(s.tickets)
-        .where(and(eq(s.tickets.workspaceId, workspaceId), eq(s.tickets.id, thread.ticketId)))
+        .from(s.emailThreads)
+        .where(and(eq(s.emailThreads.workspaceId, workspaceId), eq(s.emailThreads.gmailThreadId, email.threadId)))
+        .for("update")
         .limit(1);
-      if (row) {
-        const t = rowToTicket(row);
-        t.messages.push({ id: uid("m"), kind: "customer", author: email.fromName || t.customer.name, time: "just now", text: email.body });
-        t.status = "open";
-        t.stage = "new";
-        t.unread = true;
-        await this.saveTicket(workspaceId, t);
-      }
-      if (email.messageId) {
-        await this.db
-          .update(s.emailThreads)
-          .set({
-            lastInboundMessageId: email.messageId,
-            seenMessageIds: [...thread.seenMessageIds, email.messageId],
-          })
-          .where(and(eq(s.emailThreads.workspaceId, workspaceId), eq(s.emailThreads.gmailThreadId, email.threadId)));
-      }
-      return { ticketId: publicId, created: false, duplicate: false };
-    }
+      if (existing) return appendTo(existing);
 
-    const rawId = newTicketRawId();
-    const ticket = buildEmailTicket(rawId, email);
-    const fullId = `${workspaceId}_${rawId}`;
-    await this.db.insert(s.tickets).values({
-      id: fullId,
-      workspaceId,
-      customer: ticket.customer,
-      channel: ticket.channel,
-      subject: ticket.subject,
-      preview: ticket.preview,
-      priority: ticket.priority,
-      tags: ticket.tags,
-      status: ticket.status,
-      stage: ticket.stage,
-      assignee: ticket.assignee,
-      slaMins: ticket.slaMins,
-      slaTotal: ticket.slaTotal,
-      unread: ticket.unread,
-      time: ticket.time,
-      conf: ticket.conf,
-      archived: ticket.archived,
-      messages: ticket.messages,
-      draft: ticket.draft,
-      sortOrder: -1,
+      // No thread yet — claim it. Insert the mapping first (ON CONFLICT DO NOTHING)
+      // so a concurrent inserter can't orphan a ticket; only the winner creates one.
+      const rawId = newTicketRawId();
+      const fullId = `${workspaceId}_${rawId}`;
+      const claimed = await tx
+        .insert(s.emailThreads)
+        .values({
+          workspaceId,
+          gmailThreadId: email.threadId,
+          ticketId: fullId,
+          customerEmail: email.from,
+          lastInboundMessageId: email.messageId || null,
+          seenMessageIds: email.messageId ? [email.messageId] : [],
+        })
+        .onConflictDoNothing()
+        .returning();
+      if (claimed.length === 0) {
+        // Lost the create race — re-read the now-existing thread (locked) and append.
+        const [now] = await tx
+          .select()
+          .from(s.emailThreads)
+          .where(and(eq(s.emailThreads.workspaceId, workspaceId), eq(s.emailThreads.gmailThreadId, email.threadId)))
+          .for("update")
+          .limit(1);
+        if (!now) throw new Error("email thread vanished after insert conflict");
+        return appendTo(now);
+      }
+
+      const ticket = buildEmailTicket(rawId, email);
+      await tx.insert(s.tickets).values({
+        id: fullId,
+        workspaceId,
+        customer: ticket.customer,
+        channel: ticket.channel,
+        subject: ticket.subject,
+        preview: ticket.preview,
+        priority: ticket.priority,
+        tags: ticket.tags,
+        status: ticket.status,
+        stage: ticket.stage,
+        assignee: ticket.assignee,
+        slaMins: ticket.slaMins,
+        slaTotal: ticket.slaTotal,
+        unread: ticket.unread,
+        time: ticket.time,
+        conf: ticket.conf,
+        archived: ticket.archived,
+        messages: ticket.messages,
+        draft: ticket.draft,
+        sortOrder: -1,
+      });
+      return { ticketId: rawId, created: true, duplicate: false };
     });
-    await this.db.insert(s.emailThreads).values({
-      workspaceId,
-      gmailThreadId: email.threadId,
-      ticketId: fullId,
-      customerEmail: email.from,
-      lastInboundMessageId: email.messageId || null,
-      seenMessageIds: email.messageId ? [email.messageId] : [],
-    });
-    return { ticketId: rawId, created: true, duplicate: false };
   }
 
   async getEmailThread(workspaceId: string, ticketId: string): Promise<EmailThreadRef | null> {

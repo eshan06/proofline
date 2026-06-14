@@ -58,9 +58,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         fired = true;
       }
     }
-    // Persist the automation-driven mutations (escalate/tag/reassign) — otherwise
-    // setDraft above already saved the pre-automation state and they'd be lost.
-    if (fired) await r.saveTicket(session.workspaceId, updated);
+    // Persist only the automation-driven field mutations (escalate/tag/reassign)
+    // under a row lock — writing the whole (stale) ticket could clobber a reply
+    // that arrived during the slow AI call. setDraft above already saved the draft.
+    if (fired) {
+      await r.saveTicketFields(session.workspaceId, id, {
+        tags: updated.tags,
+        status: updated.status,
+        stage: updated.stage,
+        assignee: updated.assignee,
+        priority: updated.priority,
+      });
+    }
 
     return updated;
   });
