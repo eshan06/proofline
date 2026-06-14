@@ -1,11 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { useEffect, useState } from "react";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useToggleIntegration } from "@/hooks/use-integrations";
 import { toast } from "@/stores/toasts";
 import type { Integration, IntegrationKey, WidgetConfig } from "@/lib/schemas";
+
+const GMAIL_RESULT_TOAST: Record<string, string> = {
+  connected: "Gmail connected — inbound email now becomes tickets.",
+  unconfigured: "Gmail isn't configured on this deployment yet.",
+  forbidden: "Only admins can connect Gmail.",
+  denied: "Gmail connection was cancelled.",
+  error: "Couldn't connect Gmail — please try again.",
+};
 
 export function IntegrationsView() {
   const { data: ws } = useWorkspace();
@@ -13,9 +20,25 @@ export function IntegrationsView() {
   const toggle = useToggleIntegration();
   const [openPanel, setOpenPanel] = useState<IntegrationKey | "">("webchat");
 
+  // Surface the result of the Gmail OAuth round-trip (callback redirects with ?gmail=…),
+  // then strip the param so a refresh doesn't re-toast.
+  useEffect(() => {
+    const result = new URLSearchParams(window.location.search).get("gmail");
+    if (!result) return;
+    const msg = GMAIL_RESULT_TOAST[result];
+    if (msg) toast(msg);
+    if (result === "connected") setOpenPanel("gmail");
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
+
   const connectedCount = integrations.filter((i) => i.connected).length;
 
   const onToggle = (g: Integration) => {
+    // Gmail uses a real OAuth round-trip, not a boolean flip.
+    if (g.key === "gmail" && !g.connected) {
+      window.location.href = "/api/integrations/gmail/connect";
+      return;
+    }
     const next = !g.connected;
     toggle.mutate({ key: g.key, name: g.name, connected: next });
     if (next && g.configurable) setOpenPanel(g.key);
@@ -178,29 +201,39 @@ function WebchatPanel({ widget, onClose }: { widget: WidgetConfig | undefined; o
 }
 
 function GmailPanel({ onClose }: { onClose: () => void }) {
-  const [opts, setOpts] = useState({ hist: true, labels: false, alias: true });
-  const rows: [string, keyof typeof opts][] = [
-    ["Import last 90 days of history", "hist"],
-    ["Sync Gmail labels as tags", "labels"],
-    ["Send replies from support@acme.io", "alias"],
-  ];
+  const [syncing, setSyncing] = useState(false);
+  const sync = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/integrations/gmail/poll", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) toast(data.error ?? "Sync failed — try again.");
+      else if (data.disabled) toast("Gmail isn't configured on this deployment yet.");
+      else if (data.connected === false) toast("Reconnect Gmail to sync inbound mail.");
+      else toast(`Synced — ${data.created} new ticket${data.created === 1 ? "" : "s"}, ${data.appended} updated.`);
+    } catch {
+      toast("Sync failed — try again.");
+    } finally {
+      setSyncing(false);
+    }
+  };
   return (
-    <PanelShell title="Gmail setup" badge="Sync delayed 4m" badgeColor="#F5B74E" badgeBg="rgba(245,183,78,0.08)" onClose={onClose}>
+    <PanelShell title="Gmail setup" badge="Connected" badgeColor="#3DD68C" badgeBg="rgba(61,214,140,0.1)" onClose={onClose}>
       <div className="flex flex-col gap-[13px] px-[18px] py-4">
         <div className="flex items-center gap-[11px] rounded-[10px] border border-white/7 bg-white/[0.025] px-3.5 py-[11px]">
-          <div className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-danger/12 text-[12px] font-semibold text-danger-soft">M</div>
-          <div className="flex flex-col gap-px">
-            <span className="text-[12.5px] font-medium text-ink">support@acme.io</span>
-            <span className="text-[10.5px] text-muted">OAuth connected · scopes: read, send</span>
+          <div className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-success/12 text-[12px] font-semibold text-success">M</div>
+          <div className="flex min-w-0 flex-col gap-px">
+            <span className="text-[12.5px] font-medium text-ink">Gmail connected</span>
+            <span className="text-[10.5px] text-muted">Inbound email becomes tickets; replies send from your mailbox, threaded.</span>
           </div>
-          <button type="button" onClick={() => toast("Gmail sync queued — usually completes in under a minute")} className="ml-auto rounded-[7px] border border-white/10 bg-white/4 px-3 py-[5px] text-[11.5px] text-ink-2 hover:border-accent/50 hover:text-accent-soft">Sync now</button>
+          <button type="button" disabled={syncing} onClick={sync} className="ml-auto shrink-0 rounded-[7px] border border-white/10 bg-white/4 px-3 py-[5px] text-[11.5px] text-ink-2 hover:border-accent/50 hover:text-accent-soft disabled:opacity-50">
+            {syncing ? "Syncing…" : "Sync inbound"}
+          </button>
         </div>
-        {rows.map(([label, key]) => (
-          <div key={key} className="flex items-center gap-2.5">
-            <span className="flex-1 text-[12.5px] text-ink-2">{label}</span>
-            <ToggleSwitch on={opts[key]} onToggle={() => setOpts((o) => ({ ...o, [key]: !o[key] }))} label={label} />
-          </div>
-        ))}
+        <p className="text-[11px] leading-[1.6] text-muted">
+          For always-on inbound, run the poll endpoint on a schedule (or point a
+          Gmail push notification at it). Disconnecting forgets the stored OAuth token.
+        </p>
       </div>
     </PanelShell>
   );

@@ -91,8 +91,20 @@ docker run -p 3000:3000 --env-file .env.production proofline
   add a webhook endpoint pointing at `https://<domain>/api/billing/webhook` (events:
   `checkout.session.completed`, `customer.subscription.created/updated/deleted`) and put its
   signing secret in `STRIPE_WEBHOOK_SECRET`.
-- **Gmail (when built):** create a Google OAuth client; set the id/secret + callback
-  `https://<domain>/api/integrations/gmail/callback`.
+- **Gmail channel (inbound + outbound email):** dormant until configured.
+  1. In Google Cloud: create a project, enable the **Gmail API**, configure the
+     OAuth consent screen, and create an **OAuth client (Web application)**.
+  2. Add the redirect URI `https://<domain>/api/integrations/gmail/callback` to
+     the client's authorized redirects.
+  3. Set `GMAIL_CLIENT_ID` + `GMAIL_CLIENT_SECRET` (and `GMAIL_REDIRECT_URI` if it
+     differs from the default `${NEXT_PUBLIC_APP_URL}/api/integrations/gmail/callback`).
+  4. An admin connects the support mailbox in **Integrations → Gmail → Connect**
+     (OAuth consent). Outbound replies then send from that mailbox, threaded.
+  5. **Inbound** is pull-based: `POST /api/integrations/gmail/poll`. An admin can
+     hit "Sync inbound" in the panel; for always-on intake, run the poll on a
+     schedule (cron/Cloud Scheduler) with header `x-gmail-poll-secret: $GMAIL_POLL_SECRET`
+     and `?workspaceId=<id>`, or point a Gmail push (Pub/Sub) at the endpoint.
+     Ingestion is idempotent (deduped by Message-ID), so re-polling is safe.
 
 ## 6. Post-deploy smoke test
 

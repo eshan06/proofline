@@ -13,6 +13,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ key: string }
     const r = repo();
 
     const integration = await r.patchIntegration(session.workspaceId, parsedKey.data, body.connected);
+    // Disconnecting Gmail forgets the stored OAuth account (revokes our access path).
+    if (parsedKey.data === "gmail" && !body.connected) {
+      await r.clearGmailAccount(session.workspaceId);
+    }
     await r.appendAudit(session.workspaceId, {
       user: await actorName(session),
       action: `${body.connected ? "Connected" : "Disconnected"} ${integration.name}`,
