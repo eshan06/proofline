@@ -48,6 +48,11 @@ export const workspaces = pgTable("workspaces", {
   // Dormant until an admin completes the Google OAuth connect flow.
   gmailAddress: text("gmail_address"),
   gmailRefreshToken: text("gmail_refresh_token"),
+  // Slack channel: the installed workspace's bot token + team identity.
+  // Dormant until an admin installs the Slack app (OAuth).
+  slackTeamId: text("slack_team_id"),
+  slackTeamName: text("slack_team_name"),
+  slackBotToken: text("slack_bot_token"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -139,6 +144,28 @@ export const emailThreads = pgTable(
   (t) => [
     primaryKey({ columns: [t.workspaceId, t.gmailThreadId] }),
     index("email_threads_ticket_idx").on(t.workspaceId, t.ticketId),
+  ],
+);
+
+/**
+ * Slack email-channel analogue: maps a Slack (channel, thread) to the ticket it
+ * feeds, so replies in the thread append to one conversation. `seenEventTs`
+ * dedupes redelivered Events API messages; outbound replies post back to
+ * (channel, threadTs) via chat.postMessage.
+ */
+export const slackThreads = pgTable(
+  "slack_threads",
+  {
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    channel: text("channel").notNull(),
+    threadTs: text("thread_ts").notNull(),
+    ticketId: text("ticket_id").notNull(),
+    seenEventTs: jsonb("seen_event_ts").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.channel, t.threadTs] }),
+    index("slack_threads_ticket_idx").on(t.workspaceId, t.ticketId),
   ],
 );
 

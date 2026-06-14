@@ -20,15 +20,19 @@ import { uid, secureToken } from "@/lib/utils";
 import { seedWorkspaceData, type WorkspaceData } from "./seed-data";
 import { buildWebTicket, newTicketRawId, ticketToTranscript, type WidgetTranscriptMessage } from "./web-ticket";
 import { buildEmailTicket } from "./email-ticket";
+import { buildSlackTicket } from "./slack-ticket";
 import { planSeatLimit } from "@/server/billing/plans";
 import type { InboundEmail } from "@/server/email/gmail";
+import type { InboundSlackMessage, SlackAccount } from "@/server/slack/slack";
 import {
   NotFoundError,
+  type ChannelIngestResult,
   type EmailThreadRef,
   type GmailAccount,
   type InboundEmailResult,
   type Repository,
   type SessionInfo,
+  type SlackThreadRef,
   type SubscriptionState,
   type UserRecord,
 } from "./types";
@@ -63,6 +67,14 @@ interface EmailThreadRec {
   seen: Set<string>;
 }
 
+interface SlackThreadRec {
+  workspaceId: string;
+  channel: string;
+  threadTs: string;
+  ticketId: string;
+  seen: Set<string>;
+}
+
 export class MemoryRepository implements Repository {
   private sessions: Map<string, MemSession>;
   private workspaces: Map<string, WorkspaceData>;
@@ -73,6 +85,9 @@ export class MemoryRepository implements Repository {
   private gmailAccounts: Map<string, GmailAccount>;
   /** Keyed by `${workspaceId}:${gmailThreadId}`. */
   private emailThreads: Map<string, EmailThreadRec>;
+  private slackAccounts: Map<string, SlackAccount>;
+  /** Keyed by `${workspaceId}:${channel}:${threadTs}`. */
+  private slackThreads: Map<string, SlackThreadRec>;
 
   constructor() {
     const g = globalThis as unknown as {
@@ -85,14 +100,18 @@ export class MemoryRepository implements Repository {
         authTokens: Map<string, { kind: "reset" | "verify"; userId: string; expiresAt: number }>;
         gmailAccounts: Map<string, GmailAccount>;
         emailThreads: Map<string, EmailThreadRec>;
+        slackAccounts: Map<string, SlackAccount>;
+        slackThreads: Map<string, SlackThreadRec>;
       };
     };
     if (!g.__plMem) {
-      g.__plMem = { sessions: new Map(), workspaces: new Map(), users: new Map(), memberships: [], widgetConvos: new Map(), authTokens: new Map(), gmailAccounts: new Map(), emailThreads: new Map() };
+      g.__plMem = { sessions: new Map(), workspaces: new Map(), users: new Map(), memberships: [], widgetConvos: new Map(), authTokens: new Map(), gmailAccounts: new Map(), emailThreads: new Map(), slackAccounts: new Map(), slackThreads: new Map() };
     }
     // Backfill maps added after a long-running process first created __plMem.
     g.__plMem.gmailAccounts ??= new Map();
     g.__plMem.emailThreads ??= new Map();
+    g.__plMem.slackAccounts ??= new Map();
+    g.__plMem.slackThreads ??= new Map();
     this.sessions = g.__plMem.sessions;
     this.workspaces = g.__plMem.workspaces;
     this.users = g.__plMem.users;
@@ -101,6 +120,8 @@ export class MemoryRepository implements Repository {
     this.authTokens = g.__plMem.authTokens;
     this.gmailAccounts = g.__plMem.gmailAccounts;
     this.emailThreads = g.__plMem.emailThreads;
+    this.slackAccounts = g.__plMem.slackAccounts;
+    this.slackThreads = g.__plMem.slackThreads;
   }
 
   private ws(workspaceId: string): WorkspaceData {
@@ -276,6 +297,8 @@ export class MemoryRepository implements Repository {
     for (const [t, c] of this.widgetConvos) if (c.workspaceId === workspaceId) this.widgetConvos.delete(t);
     this.gmailAccounts.delete(workspaceId);
     for (const [k, rec] of this.emailThreads) if (rec.workspaceId === workspaceId) this.emailThreads.delete(k);
+    this.slackAccounts.delete(workspaceId);
+    for (const [k, rec] of this.slackThreads) if (rec.workspaceId === workspaceId) this.slackThreads.delete(k);
   }
 
   async deleteUserIfOrphaned(userId: string): Promise<void> {
@@ -610,6 +633,63 @@ export class MemoryRepository implements Repository {
     for (const rec of this.emailThreads.values()) {
       if (rec.workspaceId === workspaceId && rec.ticketId === ticketId) {
         return { gmailThreadId: rec.gmailThreadId, customerEmail: rec.customerEmail, lastInboundMessageId: rec.lastInboundMessageId };
+      }
+    }
+    return null;
+  }
+
+  /* slack channel -------------------------------------------------------- */
+
+  async resolveSlackWorkspace(teamId: string): Promise<string | null> {
+    for (const [wsId, acct] of this.slackAccounts) if (acct.teamId === teamId) return wsId;
+    return null;
+  }
+
+  async getSlackAccount(workspaceId: string): Promise<SlackAccount | null> {
+    return this.slackAccounts.get(workspaceId) ?? null;
+  }
+
+  async setSlackAccount(workspaceId: string, account: SlackAccount): Promise<void> {
+    this.slackAccounts.set(workspaceId, { botToken: account.botToken, teamId: account.teamId, teamName: account.teamName });
+  }
+
+  async clearSlackAccount(workspaceId: string): Promise<void> {
+    this.slackAccounts.delete(workspaceId);
+  }
+
+  async ingestSlackMessage(workspaceId: string, msg: InboundSlackMessage): Promise<ChannelIngestResult> {
+    const key = `${workspaceId}:${msg.channel}:${msg.threadTs}`;
+    const existing = this.slackThreads.get(key);
+    if (existing) {
+      if (msg.ts && existing.seen.has(msg.ts)) {
+        return { ticketId: existing.ticketId, created: false, duplicate: true };
+      }
+      const t = this.ws(workspaceId).tickets.find((x) => x.id === existing.ticketId);
+      if (t) {
+        this.append(t, { kind: "customer", author: msg.userName || t.customer.name, text: msg.text });
+        t.status = "open";
+        t.stage = "new";
+        t.unread = true;
+      }
+      if (msg.ts) existing.seen.add(msg.ts);
+      return { ticketId: existing.ticketId, created: false, duplicate: false };
+    }
+    const ticket = buildSlackTicket(newTicketRawId(), msg);
+    this.ws(workspaceId).tickets.unshift(ticket);
+    this.slackThreads.set(key, {
+      workspaceId,
+      channel: msg.channel,
+      threadTs: msg.threadTs,
+      ticketId: ticket.id,
+      seen: new Set(msg.ts ? [msg.ts] : []),
+    });
+    return { ticketId: ticket.id, created: true, duplicate: false };
+  }
+
+  async getSlackThread(workspaceId: string, ticketId: string): Promise<SlackThreadRef | null> {
+    for (const rec of this.slackThreads.values()) {
+      if (rec.workspaceId === workspaceId && rec.ticketId === ticketId) {
+        return { channel: rec.channel, threadTs: rec.threadTs };
       }
     }
     return null;

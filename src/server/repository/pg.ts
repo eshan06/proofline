@@ -23,15 +23,19 @@ import { uid, secureToken } from "@/lib/utils";
 import { seedWorkspaceData } from "./seed-data";
 import { buildWebTicket, newTicketRawId, ticketToTranscript, type WidgetTranscriptMessage } from "./web-ticket";
 import { buildEmailTicket } from "./email-ticket";
+import { buildSlackTicket } from "./slack-ticket";
 import { planSeatLimit } from "@/server/billing/plans";
 import type { InboundEmail } from "@/server/email/gmail";
+import type { InboundSlackMessage, SlackAccount } from "@/server/slack/slack";
 import {
   NotFoundError,
+  type ChannelIngestResult,
   type EmailThreadRef,
   type GmailAccount,
   type InboundEmailResult,
   type Repository,
   type SessionInfo,
+  type SlackThreadRef,
   type SubscriptionState,
   type UserRecord,
 } from "./types";
@@ -849,6 +853,142 @@ export class PgRepository implements Repository {
       .limit(1);
     if (!row) return null;
     return { gmailThreadId: row.gmailThreadId, customerEmail: row.customerEmail, lastInboundMessageId: row.lastInboundMessageId };
+  }
+
+  /* slack channel -------------------------------------------------------- */
+
+  async resolveSlackWorkspace(teamId: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ id: s.workspaces.id })
+      .from(s.workspaces)
+      .where(eq(s.workspaces.slackTeamId, teamId))
+      .limit(1);
+    return row?.id ?? null;
+  }
+
+  async getSlackAccount(workspaceId: string): Promise<SlackAccount | null> {
+    const [row] = await this.db
+      .select({ botToken: s.workspaces.slackBotToken, teamId: s.workspaces.slackTeamId, teamName: s.workspaces.slackTeamName })
+      .from(s.workspaces)
+      .where(eq(s.workspaces.id, workspaceId))
+      .limit(1);
+    if (!row?.botToken || !row.teamId) return null;
+    return { botToken: row.botToken, teamId: row.teamId, teamName: row.teamName ?? "" };
+  }
+
+  async setSlackAccount(workspaceId: string, account: SlackAccount): Promise<void> {
+    await this.db
+      .update(s.workspaces)
+      .set({ slackBotToken: account.botToken, slackTeamId: account.teamId, slackTeamName: account.teamName })
+      .where(eq(s.workspaces.id, workspaceId));
+  }
+
+  async clearSlackAccount(workspaceId: string): Promise<void> {
+    await this.db
+      .update(s.workspaces)
+      .set({ slackBotToken: null, slackTeamId: null, slackTeamName: null })
+      .where(eq(s.workspaces.id, workspaceId));
+  }
+
+  async ingestSlackMessage(workspaceId: string, msg: InboundSlackMessage): Promise<ChannelIngestResult> {
+    // One transaction so a new-thread create and a same-thread append can't race
+    // redelivered Events API messages; the slack_threads row is the lock point.
+    return this.db.transaction(async (tx) => {
+      const appendTo = async (thread: typeof s.slackThreads.$inferSelect): Promise<ChannelIngestResult> => {
+        const publicId = stripPrefix(thread.ticketId, workspaceId);
+        if (msg.ts && thread.seenEventTs.includes(msg.ts)) {
+          return { ticketId: publicId, created: false, duplicate: true };
+        }
+        const [row] = await tx
+          .select()
+          .from(s.tickets)
+          .where(and(eq(s.tickets.workspaceId, workspaceId), eq(s.tickets.id, thread.ticketId)))
+          .for("update")
+          .limit(1);
+        if (row) {
+          const t = rowToTicket(row);
+          t.messages.push({ id: uid("m"), kind: "customer", author: msg.userName || t.customer.name, time: "just now", text: msg.text });
+          t.status = "open";
+          t.stage = "new";
+          t.unread = true;
+          await tx.update(s.tickets).set({ status: t.status, stage: t.stage, unread: t.unread, messages: t.messages })
+            .where(and(eq(s.tickets.workspaceId, workspaceId), eq(s.tickets.id, thread.ticketId)));
+        }
+        if (msg.ts) {
+          await tx.update(s.slackThreads)
+            .set({ seenEventTs: [...thread.seenEventTs, msg.ts] })
+            .where(and(eq(s.slackThreads.workspaceId, workspaceId), eq(s.slackThreads.channel, msg.channel), eq(s.slackThreads.threadTs, msg.threadTs)));
+        }
+        return { ticketId: publicId, created: false, duplicate: false };
+      };
+
+      const [existing] = await tx
+        .select()
+        .from(s.slackThreads)
+        .where(and(eq(s.slackThreads.workspaceId, workspaceId), eq(s.slackThreads.channel, msg.channel), eq(s.slackThreads.threadTs, msg.threadTs)))
+        .for("update")
+        .limit(1);
+      if (existing) return appendTo(existing);
+
+      const rawId = newTicketRawId();
+      const fullId = `${workspaceId}_${rawId}`;
+      const claimed = await tx
+        .insert(s.slackThreads)
+        .values({
+          workspaceId,
+          channel: msg.channel,
+          threadTs: msg.threadTs,
+          ticketId: fullId,
+          seenEventTs: msg.ts ? [msg.ts] : [],
+        })
+        .onConflictDoNothing()
+        .returning();
+      if (claimed.length === 0) {
+        const [now] = await tx
+          .select()
+          .from(s.slackThreads)
+          .where(and(eq(s.slackThreads.workspaceId, workspaceId), eq(s.slackThreads.channel, msg.channel), eq(s.slackThreads.threadTs, msg.threadTs)))
+          .for("update")
+          .limit(1);
+        if (!now) throw new Error("slack thread vanished after insert conflict");
+        return appendTo(now);
+      }
+
+      const ticket = buildSlackTicket(rawId, msg);
+      await tx.insert(s.tickets).values({
+        id: fullId,
+        workspaceId,
+        customer: ticket.customer,
+        channel: ticket.channel,
+        subject: ticket.subject,
+        preview: ticket.preview,
+        priority: ticket.priority,
+        tags: ticket.tags,
+        status: ticket.status,
+        stage: ticket.stage,
+        assignee: ticket.assignee,
+        slaMins: ticket.slaMins,
+        slaTotal: ticket.slaTotal,
+        unread: ticket.unread,
+        time: ticket.time,
+        conf: ticket.conf,
+        archived: ticket.archived,
+        messages: ticket.messages,
+        draft: ticket.draft,
+        sortOrder: -1,
+      });
+      return { ticketId: rawId, created: true, duplicate: false };
+    });
+  }
+
+  async getSlackThread(workspaceId: string, ticketId: string): Promise<SlackThreadRef | null> {
+    const [row] = await this.db
+      .select()
+      .from(s.slackThreads)
+      .where(and(eq(s.slackThreads.workspaceId, workspaceId), eq(s.slackThreads.ticketId, `${workspaceId}_${ticketId}`)))
+      .limit(1);
+    if (!row) return null;
+    return { channel: row.channel, threadTs: row.threadTs };
   }
 }
 

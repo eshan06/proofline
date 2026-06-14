@@ -55,6 +55,7 @@ export class NotFoundError extends Error {
 export type { WidgetTranscriptMessage } from "./web-ticket";
 import type { WidgetTranscriptMessage } from "./web-ticket";
 import type { InboundEmail } from "@/server/email/gmail";
+import type { InboundSlackMessage, SlackAccount } from "@/server/slack/slack";
 
 /** Persisted Gmail OAuth account for a workspace's support inbox. */
 export interface GmailAccount {
@@ -75,6 +76,15 @@ export interface InboundEmailResult {
   created: boolean;
   /** True when the message was already ingested (deduped, no-op). */
   duplicate: boolean;
+}
+
+/** Channel-agnostic ingest result (shared by the email + Slack inbound paths). */
+export type ChannelIngestResult = InboundEmailResult;
+
+/** Metadata to post an outbound reply back into a Slack thread. */
+export interface SlackThreadRef {
+  channel: string;
+  threadTs: string;
 }
 
 /**
@@ -209,4 +219,15 @@ export interface Repository {
   ingestInboundEmail(workspaceId: string, email: InboundEmail): Promise<InboundEmailResult>;
   /** Thread metadata for an email ticket (for In-Reply-To on agent replies), or null if not an email thread. */
   getEmailThread(workspaceId: string, ticketId: string): Promise<EmailThreadRef | null>;
+
+  /* slack email channel (dormant until an admin installs the Slack app) */
+  /** Which workspace owns the given Slack team (workspace install), or null. */
+  resolveSlackWorkspace(teamId: string): Promise<string | null>;
+  getSlackAccount(workspaceId: string): Promise<SlackAccount | null>;
+  setSlackAccount(workspaceId: string, account: SlackAccount): Promise<void>;
+  clearSlackAccount(workspaceId: string): Promise<void>;
+  /** Ingest an inbound Slack message: open a ticket for a new thread, or append (deduped by event ts). */
+  ingestSlackMessage(workspaceId: string, msg: InboundSlackMessage): Promise<ChannelIngestResult>;
+  /** (channel, threadTs) for a Slack ticket so an agent reply posts back, or null if not a Slack thread. */
+  getSlackThread(workspaceId: string, ticketId: string): Promise<SlackThreadRef | null>;
 }
