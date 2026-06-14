@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node --experimental-strip-types src/server/db/migrate.ts",
+    "db:migrate": "node scripts/migrate.mjs",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
