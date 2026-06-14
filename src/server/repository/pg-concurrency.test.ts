@@ -97,4 +97,29 @@ suite("PgRepository concurrency (integration)", () => {
     const ticket = await repo.findTicket(wsId, results[0]!.ticketId);
     expect((ticket?.messages ?? []).filter((m) => m.kind === "customer")).toHaveLength(1); // not re-appended
   }, 30_000);
+
+  it("Slack: opens exactly one ticket when the same thread is ingested concurrently", async () => {
+    const threadTs = `1700000${Date.now() % 100000}.0001`;
+    const results = await Promise.all(
+      Array.from({ length: 5 }, (_, i) =>
+        repo.ingestSlackMessage(wsId, { channel: "C1", threadTs, ts: `${threadTs}-${i}`, userId: "U1", userName: "Dana", text: `m${i}` }),
+      ),
+    );
+    expect(results.filter((r) => r.created)).toHaveLength(1);
+    expect(new Set(results.map((r) => r.ticketId)).size).toBe(1);
+    const ticket = await repo.findTicket(wsId, results[0]!.ticketId);
+    expect((ticket?.messages ?? []).filter((m) => m.kind === "customer")).toHaveLength(5);
+    expect(await repo.getSlackThread(wsId, results[0]!.ticketId)).toEqual({ channel: "C1", threadTs });
+  }, 30_000);
+
+  it("Slack: does not lose messages under concurrent replies on a Slack ticket", async () => {
+    const threadTs = `1700001${Date.now() % 100000}.0002`;
+    const opened = await repo.ingestSlackMessage(wsId, { channel: "C2", threadTs, ts: threadTs, userId: "U2", userName: "Eve", text: "help" });
+    const N = 15;
+    await Promise.all(Array.from({ length: N }, (_, i) => repo.addReply(wsId, opened.ticketId, `slack-reply-${i}`, false, "Agent")));
+    const ticket = await repo.findTicket(wsId, opened.ticketId);
+    const replies = (ticket?.messages ?? []).filter((m) => m.kind === "agent");
+    expect(replies).toHaveLength(N);
+    expect(new Set(replies.map((m) => m.text)).size).toBe(N);
+  }, 30_000);
 });
