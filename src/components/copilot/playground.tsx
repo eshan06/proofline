@@ -10,7 +10,7 @@ import type { PlaygroundResult } from "@/lib/schemas";
 
 type State = "idle" | "loading" | "done";
 
-export function Playground({ threshold }: { threshold: number }) {
+export function Playground({ threshold, sources }: { threshold: number; sources: number }) {
   const [question, setQuestion] = useState("");
   const [state, setState] = useState<State>("idle");
   const [result, setResult] = useState<PlaygroundResult | null>(null);
@@ -79,7 +79,7 @@ export function Playground({ threshold }: { threshold: number }) {
       {state === "loading" ? (
         <div className="flex items-center gap-2.5 px-1 py-3.5">
           <span className="h-3.5 w-3.5 rounded-full border-2 border-accent/25" style={{ borderTopColor: "#4D7CFE", animation: "plSpin 0.7s linear infinite" }} />
-          <span className="text-[12px] text-accent-soft" style={{ animation: "plPulse 1.2s ease infinite" }}>Searching 7 sources…</span>
+          <span className="text-[12px] text-accent-soft" style={{ animation: "plPulse 1.2s ease infinite" }}>Searching {sources} source{sources === 1 ? "" : "s"}…</span>
         </div>
       ) : null}
 

@@ -190,7 +190,7 @@ export function CopilotView() {
             </div>
           </div>
 
-          <Playground threshold={copilot.threshold} />
+          <Playground threshold={copilot.threshold} sources={ws?.kbDocs.length ?? 0} />
         </div>
       </div>
     </div>
