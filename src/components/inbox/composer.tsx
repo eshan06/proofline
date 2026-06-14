@@ -23,27 +23,39 @@ export function Composer({ ticket, isDemo }: { ticket: Ticket; isDemo: boolean }
 
   void isDemo; // demo "send" step is completed server-side on POST /messages
 
-  const send = () => {
+  const busy = sendReply.isPending || addNote.isPending;
+
+  const send = async () => {
+    if (busy) return;
     if (!composer.trim()) {
       toast("Write a reply first — or accept the AI draft");
       return;
     }
-    sendReply.mutate({
-      id: ticket.id,
-      text: composer,
-      viaAI: draftMode === "accepted",
-      customerName: ticket.customer.name,
-    });
-    setComposer(ticket.id, "");
+    try {
+      await sendReply.mutateAsync({
+        id: ticket.id,
+        text: composer,
+        viaAI: draftMode === "accepted",
+        customerName: ticket.customer.name,
+      });
+      setComposer(ticket.id, ""); // clear only on success — never lose the reply on failure
+    } catch {
+      /* useWorkspaceMutation already toasts + rolls back; keep the text */
+    }
   };
 
-  const note = () => {
+  const note = async () => {
+    if (busy) return;
     if (!composer.trim()) {
       toast("Write the note in the composer first");
       return;
     }
-    addNote.mutate({ id: ticket.id, text: composer });
-    setComposer(ticket.id, "");
+    try {
+      await addNote.mutateAsync({ id: ticket.id, text: composer });
+      setComposer(ticket.id, "");
+    } catch {
+      /* keep the text on failure */
+    }
   };
 
   return (
@@ -64,23 +76,18 @@ export function Composer({ ticket, isDemo }: { ticket: Ticket; isDemo: boolean }
         <button
           type="button"
           onClick={send}
-          className="flex items-center gap-[7px] rounded-[7px] border-0 bg-accent px-3.5 py-[7px] text-[12px] font-semibold text-white hover:bg-accent-hover"
+          disabled={busy}
+          className="flex items-center gap-[7px] rounded-[7px] border-0 bg-accent px-3.5 py-[7px] text-[12px] font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
           style={{ boxShadow: "0 2px 12px rgba(77,124,254,0.3)" }}
         >
-          <span>Send reply</span>
+          <span>{sendReply.isPending ? "Sending…" : "Send reply"}</span>
           <Kbd className="bg-white/18 text-white/70">⌘↵</Kbd>
         </button>
         <button
           type="button"
-          onClick={() => toast("Draft saved")}
-          className="rounded-[7px] border border-white/9 bg-white/5 px-3 py-[7px] text-[12px] font-medium text-ink-2 hover:bg-white/9"
-        >
-          Save draft
-        </button>
-        <button
-          type="button"
           onClick={note}
-          className="rounded-[7px] border border-white/9 bg-white/5 px-3 py-[7px] text-[12px] font-medium text-ink-2 hover:border-warning/50 hover:text-warning"
+          disabled={busy}
+          className="rounded-[7px] border border-white/9 bg-white/5 px-3 py-[7px] text-[12px] font-medium text-ink-2 hover:border-warning/50 hover:text-warning disabled:opacity-60"
         >
           Add note
         </button>
@@ -88,14 +95,16 @@ export function Composer({ ticket, isDemo }: { ticket: Ticket; isDemo: boolean }
         <button
           type="button"
           onClick={() => escalate.mutate({ id: ticket.id })}
-          className="rounded-[7px] border border-warning/30 bg-transparent px-3 py-[7px] text-[12px] font-medium text-warning hover:bg-warning/[0.08]"
+          disabled={escalate.isPending}
+          className="rounded-[7px] border border-warning/30 bg-transparent px-3 py-[7px] text-[12px] font-medium text-warning hover:bg-warning/[0.08] disabled:opacity-60"
         >
           Escalate
         </button>
         <button
           type="button"
           onClick={() => closeTicket.mutate({ id: ticket.id })}
-          className="rounded-[7px] border border-white/9 bg-transparent px-3 py-[7px] text-[12px] font-medium text-ink-4 hover:border-success/50 hover:text-success"
+          disabled={closeTicket.isPending}
+          className="rounded-[7px] border border-white/9 bg-transparent px-3 py-[7px] text-[12px] font-medium text-ink-4 hover:border-success/50 hover:text-success disabled:opacity-60"
         >
           Close ticket
         </button>

@@ -12,23 +12,61 @@ import {
   homeVolume,
 } from "@/data/home";
 
-const today = "Saturday, June 13";
-
 export function HomeView() {
   const router = useRouter();
   const { data: ws } = useWorkspace();
   const firstName = ws?.currentUser?.name.split(/\s+/)[0] ?? "there";
+  const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+
+  const tickets = ws?.tickets ?? [];
+  const attention = tickets.filter(
+    (t) => t.status === "open" || t.status === "escalated" || (t.conf != null && t.conf < 0.7),
+  ).length;
 
   const quickActions = [
     { label: "Upload docs", icon: Plus, run: () => router.push("/kb?upload=1") },
     { label: "Connect channel", icon: LayoutGrid, run: () => router.push("/integrations") },
     { label: "New automation", icon: Zap, run: () => router.push("/automations") },
     {
-      label: "Review low-confidence",
+      label: "Open inbox",
       icon: AlertTriangle,
-      run: () => router.push("/inbox/TKT-1038?filter=Low+Confidence"),
+      run: () => router.push("/inbox"),
     },
   ];
+
+  // New / empty workspace → onboarding, not someone else's fixture metrics.
+  if (ws && tickets.length === 0) {
+    const steps = [
+      { n: 1, title: "Connect a channel", body: "Add the website chat widget, or wire up email — messages land here as tickets.", cta: "Integrations", run: () => router.push("/integrations") },
+      { n: 2, title: "Upload your docs", body: "Give the AI sources to cite. It drafts replies grounded only in what you upload.", cta: "Knowledge base", run: () => router.push("/kb?upload=1") },
+      { n: 3, title: "Reply with the copilot", body: "Open a ticket, generate a grounded draft, and send — with a confidence score every time.", cta: "Open inbox", run: () => router.push("/inbox") },
+    ];
+    return (
+      <div className="min-h-0 flex-1 overflow-y-auto" style={{ animation: "plFade 0.22s ease" }}>
+        <div className="mx-auto max-w-[760px] px-8 pb-10 pt-[56px]">
+          <div className="text-[22px] font-semibold tracking-[-0.02em] text-ink">Welcome to Proofline, {firstName}</div>
+          <p className="mt-2 text-[13px] text-muted">Your workspace is ready. Three steps to your first grounded AI reply:</p>
+          <div className="mt-6 flex flex-col gap-3">
+            {steps.map((s) => (
+              <button
+                key={s.n}
+                type="button"
+                onClick={s.run}
+                className="flex items-center gap-3.5 rounded-[12px] border border-white/8 bg-card px-[18px] py-4 text-left hover:border-accent/40"
+              >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/15 font-mono text-[12px] font-semibold text-accent-soft">{s.n}</span>
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="text-[13.5px] font-semibold text-ink">{s.title}</span>
+                  <span className="text-[11.5px] text-muted">{s.body}</span>
+                </span>
+                <span className="shrink-0 text-[11.5px] font-medium text-accent">{s.cta} →</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const volMax = Math.max(...homeVolume.map(([a, h]) => a + h));
 
@@ -39,7 +77,7 @@ export function HomeView() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-[3px]">
             <div className="text-[19px] font-semibold tracking-[-0.02em] text-ink">Good morning, {firstName}</div>
-            <div className="text-[12px] text-muted">{today} · 6 conversations need your attention</div>
+            <div className="text-[12px] text-muted">{today} · {attention} conversation{attention === 1 ? "" : "s"} need your attention</div>
           </div>
           <span className="flex-1" />
           <div className="flex flex-wrap gap-2">
