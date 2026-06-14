@@ -34,16 +34,18 @@ export function AnalyticsView() {
   const docMax = docs[0]?.[1] ?? 1;
   const lead = leaderboard(tickets);
 
+  // Partition every ticket into exactly one bucket: a resolved ticket is
+  // "Resolved" regardless of its status, so the unresolved buckets all exclude it.
   const status = [
     { label: "Open", n: tickets.filter((t) => t.status === "open" && !isResolved(t)).length, color: "#5E89FF" },
-    { label: "Waiting", n: tickets.filter((t) => t.status === "waiting").length, color: "#F5B74E" },
-    { label: "Escalated", n: tickets.filter((t) => t.status === "escalated").length, color: "#F36C6C" },
+    { label: "Waiting", n: tickets.filter((t) => t.status === "waiting" && !isResolved(t)).length, color: "#F5B74E" },
+    { label: "Escalated", n: tickets.filter((t) => t.status === "escalated" && !isResolved(t)).length, color: "#F36C6C" },
     { label: "Resolved", n: tickets.filter(isResolved).length, color: "#3DD68C" },
   ];
   const statusMax = Math.max(1, ...status.map((s) => s.n));
 
   const cards = [
-    { label: "Tickets handled", value: String(m.total), sub: `${m.open} open`, subColor: "#8A93A6", valueColor: "#E6EAF2" },
+    { label: "Tickets handled", value: String(m.total), sub: `${m.open} unresolved`, subColor: "#8A93A6", valueColor: "#E6EAF2" },
     { label: "Resolved", value: String(m.resolved), sub: m.total ? `${Math.round((m.resolved / m.total) * 100)}% of all` : "—", subColor: "#3DD68C", valueColor: "#E6EAF2" },
     { label: "AI acceptance", value: pct(m.acceptance), sub: `${m.aiSent}/${m.drafted} drafts sent`, subColor: "#8A93A6", valueColor: "#3DD68C" },
     { label: "SLA at risk", value: String(m.slaRisk), sub: "due ≤45m", subColor: m.slaRisk ? "#F36C6C" : "#8A93A6", valueColor: m.slaRisk ? "#F36C6C" : "#E6EAF2" },

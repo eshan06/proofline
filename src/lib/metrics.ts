@@ -158,6 +158,12 @@ export interface ActivityEntry {
   type: AuditEvent["type"];
 }
 
+/**
+ * Most-recent audit events, mapped for the activity feed. Expects `audit`
+ * newest-first — both repositories provide it that way (memory unshifts new
+ * events; the Postgres query orders by createdAt desc). `time` is a relative
+ * label and cannot be re-sorted here, so ordering must hold upstream.
+ */
 export function recentActivity(audit: AuditEvent[], limit = 6): ActivityEntry[] {
   return audit.slice(0, limit).map((e) => ({
     init: initialsOf(e.user),

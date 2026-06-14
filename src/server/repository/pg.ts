@@ -1,4 +1,4 @@
-import { and, eq, asc, inArray, sql, or, ne, lt } from "drizzle-orm";
+import { and, eq, asc, desc, inArray, sql, or, ne, lt } from "drizzle-orm";
 import { getDb, type Db } from "@/server/db/client";
 import * as s from "@/server/db/schema";
 import type {
@@ -345,7 +345,7 @@ export class PgRepository implements Repository {
       db.select().from(s.automations).where(eq(s.automations.workspaceId, workspaceId)).orderBy(asc(s.automations.sortOrder)),
       db.select().from(s.integrations).where(eq(s.integrations.workspaceId, workspaceId)).orderBy(asc(s.integrations.sortOrder)),
       db.select().from(s.memberships).where(eq(s.memberships.workspaceId, workspaceId)),
-      db.select().from(s.auditEvents).where(eq(s.auditEvents.workspaceId, workspaceId)).limit(200),
+      db.select().from(s.auditEvents).where(eq(s.auditEvents.workspaceId, workspaceId)).orderBy(desc(s.auditEvents.createdAt)).limit(200),
       db.select().from(s.notifications).where(eq(s.notifications.workspaceId, workspaceId)).orderBy(asc(s.notifications.sortOrder)).limit(100),
       db.select().from(s.copilotSettings).where(eq(s.copilotSettings.workspaceId, workspaceId)).limit(1),
     ]);
