@@ -309,6 +309,20 @@ export type Subscription = z.infer<typeof subscriptionSchema>;
 /*  Workspace payload (GET /api/workspace)                             */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Light "shell" payload — just what the app chrome (sidebar/topbar/banners)
+ * needs for an instant first paint. SSR'd by the (app) layout; the heavy
+ * workspace data loads lazily client-side (useWorkspace) and is merged over
+ * this once available. Keeps the heavy ~9-query fetch off the render path.
+ */
+export const shellSchema = z.object({
+  name: z.string(),
+  currentUser: currentUserSchema.nullable(),
+  notifications: z.array(notificationSchema),
+  demo: demoStateSchema,
+});
+export type Shell = z.infer<typeof shellSchema>;
+
 export const workspaceSchema = z.object({
   name: z.string(),
   tickets: z.array(ticketSchema),

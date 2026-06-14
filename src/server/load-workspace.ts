@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { currentSession, startDemoSession } from "@/server/session";
 import { repo, type SessionInfo } from "@/server/repository";
 import { hasDatabase } from "@/server/db/client";
-import type { CurrentUser, Workspace } from "@/lib/schemas";
+import type { CurrentUser, Shell, Workspace } from "@/lib/schemas";
 
 /** Initials from a display name ("Ada Lovelace" → "AL"), falling back to email. */
 function initialsOf(name: string, email: string): string {
@@ -19,9 +19,12 @@ function initialsOf(name: string, email: string): string {
 /** Resolve the signed-in user for a session, or null for demo/anonymous. */
 export async function resolveCurrentUser(session: SessionInfo): Promise<CurrentUser | null> {
   if (!session.userId) return null;
-  const user = await repo().getUser(session.userId);
+  // Parallel — independent queries; saves a DB round-trip on the shell path.
+  const [user, role] = await Promise.all([
+    repo().getUser(session.userId),
+    repo().membershipRole(session.userId, session.workspaceId),
+  ]);
   if (!user) return null;
-  const role = await repo().membershipRole(session.userId, session.workspaceId);
   return {
     name: user.name,
     email: user.email,
@@ -68,6 +71,29 @@ export async function loadWorkspace(): Promise<Workspace> {
   }
   const ws = await repo().getWorkspace(session.workspaceId);
   return attachSession(ws, session);
+}
+
+/**
+ * Light shell loader for the app layout — just the chrome's data (name,
+ * identity, notifications, demo state). Two cheap queries instead of the full
+ * ~9-query workspace fetch, so the shell paints instantly; the heavy workspace
+ * data loads lazily client-side (useWorkspace) and is merged over this.
+ */
+export async function loadShell(): Promise<Shell> {
+  const session = await currentSession();
+  if (!session) {
+    if (hasDatabase()) redirect("/signin");
+    const demo = await startDemoSession();
+    const shell = await repo().getShell(demo.workspaceId);
+    return { name: shell.name, currentUser: null, notifications: shell.notifications, demo: { active: true, steps: demo.demoSteps } };
+  }
+  const [shell, currentUser] = await Promise.all([repo().getShell(session.workspaceId), resolveCurrentUser(session)]);
+  return {
+    name: shell.name,
+    currentUser,
+    notifications: shell.notifications,
+    demo: { active: session.type === "demo", steps: session.demoSteps },
+  };
 }
 
 /** Used by the /demo route: force a sandbox session then enter the app. */

@@ -11,6 +11,7 @@ import type {
   Member,
   MemberRole,
   Message,
+  Notification,
   Ticket,
   TicketPatch,
   Workspace,
@@ -308,6 +309,11 @@ export class MemoryRepository implements Repository {
         currentPeriodEnd: d.subscription.currentPeriodEnd,
       },
     };
+  }
+
+  async getShell(workspaceId: string): Promise<{ name: string; notifications: Notification[] }> {
+    const d = this.ws(workspaceId);
+    return { name: d.name, notifications: d.notifications };
   }
 
   async getKbDocs(workspaceId: string): Promise<KbDoc[]> {

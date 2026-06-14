@@ -9,6 +9,7 @@ import type {
   KbDoc,
   Member,
   MemberRole,
+  Notification,
   Ticket,
   TicketPatch,
   Workspace,
@@ -113,6 +114,8 @@ export interface Repository {
 
   /* workspace payload */
   getWorkspace(workspaceId: string): Promise<Workspace>;
+  /** Light shell data (name + notifications) for fast first paint. */
+  getShell(workspaceId: string): Promise<{ name: string; notifications: Notification[] }>;
   getKbDocs(workspaceId: string): Promise<KbDoc[]>;
   getAutomations(workspaceId: string): Promise<Automation[]>;
   getCopilot(workspaceId: string): Promise<CopilotSettings>;

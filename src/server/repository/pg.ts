@@ -14,6 +14,7 @@ import type {
   Member,
   MemberRole,
   Message,
+  Notification,
   Ticket,
   TicketPatch,
   Workspace,
@@ -394,6 +395,16 @@ export class PgRepository implements Repository {
         currentPeriodEnd: wsRow.currentPeriodEnd,
       },
     };
+  }
+
+  async getShell(workspaceId: string): Promise<{ name: string; notifications: Notification[] }> {
+    const [wsRow] = await this.db.select({ name: s.workspaces.name }).from(s.workspaces).where(eq(s.workspaces.id, workspaceId)).limit(1);
+    if (!wsRow) {
+      await this.seedWorkspace(workspaceId, "Acme Inc");
+      return this.getShell(workspaceId);
+    }
+    const notif = await this.db.select().from(s.notifications).where(eq(s.notifications.workspaceId, workspaceId)).orderBy(asc(s.notifications.sortOrder));
+    return { name: wsRow.name, notifications: notif.map((n) => ({ c: n.color, text: n.text, time: n.time })) };
   }
 
   async getKbDocs(workspaceId: string): Promise<KbDoc[]> {
