@@ -14,7 +14,7 @@ const signupSchema = z.object({
 
 export async function POST(req: Request) {
   return handleApi(async () => {
-    enforceRateLimit(req, "signup", LIMITS.auth);
+    await enforceRateLimit(req, "signup", LIMITS.auth);
     const body = await parseBody(req, signupSchema);
     const r = repo();
     const existing = await r.findUserByEmail(body.email);

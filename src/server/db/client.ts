@@ -24,17 +24,40 @@ export function hasDatabase(): boolean {
  * TLS policy for the connection. Local dev databases (Docker) speak plaintext;
  * managed Postgres (AWS RDS, Supabase, Neon, …) requires TLS but presents a
  * cert signed by a provider CA that isn't in Node's default trust store, so a
- * naive `sslmode=require` still fails verification. We therefore encrypt
- * without strict CA verification for remote hosts. `DB_SSL` overrides:
- * `disable` (force off) or `verify` (strict — set `NODE_EXTRA_CA_CERTS` to the
- * provider CA bundle). Hardening TODO: ship the RDS CA bundle and default to verify.
+ * naive `sslmode=require` still fails verification.
+ *
+ * Strict verification (recommended in production): set `DB_CA_CERT` to the
+ * provider's CA-bundle PEM (e.g. the Amazon RDS global bundle) — `\n`-escaped is
+ * fine — and we verify against it. `DB_SSL=verify` forces strict verification
+ * (use with `DB_CA_CERT` or `NODE_EXTRA_CA_CERTS`). `DB_SSL=disable` forces TLS
+ * off. With none of these, a remote host is encrypted but NOT CA-verified (a
+ * weaker posture we warn about once), and a local host is plaintext.
  */
-export function sslConfig(url: string): false | { rejectUnauthorized: boolean } {
+type SslConfig = false | { rejectUnauthorized: boolean; ca?: string };
+
+let warnedInsecureTls = false;
+function warnInsecureTls(): void {
+  if (warnedInsecureTls) return;
+  warnedInsecureTls = true;
+  console.warn(
+    "[db] Connecting to a remote database with TLS but WITHOUT CA verification " +
+      "(vulnerable to MITM). Set DB_CA_CERT (provider CA-bundle PEM) or DB_SSL=verify " +
+      "with NODE_EXTRA_CA_CERTS to verify the server certificate.",
+  );
+}
+
+export function sslConfig(url: string): SslConfig {
   const mode = process.env.DB_SSL;
   if (mode === "disable") return false;
-  if (mode === "verify") return { rejectUnauthorized: true };
+  const ca = process.env.DB_CA_CERT?.replace(/\\n/g, "\n").trim() || undefined;
+  if (mode === "verify") return ca ? { rejectUnauthorized: true, ca } : { rejectUnauthorized: true };
   const isLocal = /@(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)[:/]/.test(url);
-  return isLocal ? false : { rejectUnauthorized: false };
+  if (isLocal) return false;
+  // Remote, no explicit mode: verify against DB_CA_CERT if supplied, else encrypt
+  // without verification (and warn — this is the weak default we want surfaced).
+  if (ca) return { rejectUnauthorized: true, ca };
+  warnInsecureTls();
+  return { rejectUnauthorized: false };
 }
 
 export function getDb(): Db {

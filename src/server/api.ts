@@ -50,8 +50,8 @@ export async function actorName(session: SessionInfo): Promise<string> {
 }
 
 /** Throw 429 when the caller exceeds the named limit (keyed by client IP). */
-export function enforceRateLimit(req: Request, scope: string, limit: RateLimit): void {
-  const result = rateLimit(clientKey(req, scope), limit);
+export async function enforceRateLimit(req: Request, scope: string, limit: RateLimit): Promise<void> {
+  const result = await rateLimit(clientKey(req, scope), limit);
   if (!result.allowed) {
     logger.warn("rate_limited", { scope, retryAfterSec: result.retryAfterSec });
     throw new ApiError(429, `Too many requests — try again in ${result.retryAfterSec}s.`);

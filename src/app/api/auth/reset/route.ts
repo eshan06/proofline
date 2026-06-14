@@ -12,7 +12,7 @@ const schema = z.object({ token: z.string().min(1), password: z.string().min(8, 
  */
 export async function POST(req: Request) {
   return handleApi(async () => {
-    enforceRateLimit(req, "reset", LIMITS.auth);
+    await enforceRateLimit(req, "reset", LIMITS.auth);
     const body = await parseBody(req, schema);
     const r = repo();
     const userId = await r.consumePasswordReset(body.token);

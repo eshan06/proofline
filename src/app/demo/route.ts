@@ -11,7 +11,7 @@ import { clientKey, rateLimit, LIMITS } from "@/server/rate-limit";
  * fresh budgets indefinitely.
  */
 export async function GET(req: Request) {
-  const rl = rateLimit(clientKey(req, "demo"), LIMITS.auth);
+  const rl = await rateLimit(clientKey(req, "demo"), LIMITS.auth);
   if (!rl.allowed) {
     return new Response(`Too many demo sessions — try again in ${rl.retryAfterSec}s.`, {
       status: 429,

@@ -38,7 +38,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ siteKey: strin
   const headers = corsHeaders(r.allowOrigin);
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status, headers });
 
-  const rl = rateLimit(clientKey(req, "widget"), LIMITS.api);
+  const rl = await rateLimit(clientKey(req, "widget"), LIMITS.api);
   if (!rl.allowed) {
     return NextResponse.json({ error: "Too many messages — slow down." }, { status: 429, headers });
   }

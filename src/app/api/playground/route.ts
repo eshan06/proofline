@@ -7,7 +7,7 @@ import { repo } from "@/server/repository";
 
 export async function POST(req: Request) {
   return handleApi(async () => {
-    enforceRateLimit(req, "ai", LIMITS.ai);
+    await enforceRateLimit(req, "ai", LIMITS.ai);
     const session = await requireSession();
     const body = await parseBody(req, playgroundRequestSchema);
     const r = repo();

@@ -22,7 +22,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       return r.setDraft(session.workspaceId, id, { ...ticket.draft, text: body.text });
     }
 
-    enforceRateLimit(req, "ai", LIMITS.ai);
+    await enforceRateLimit(req, "ai", LIMITS.ai);
     if (!(await r.consumeAiCall(session.id))) {
       throw new ApiError(429, "Demo AI limit reached — sign up to keep drafting.");
     }

@@ -1,15 +1,23 @@
 /**
  * Token-bucket rate limiter. The default store is in-process (survives dev
- * reloads via a global); production swaps the RateStore for Redis/Upstash
- * behind the same interface so limits hold across instances.
+ * reloads via a global); set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN
+ * to use a shared Redis store so limits hold across instances. The store is
+ * async (a distributed backend is a network round-trip), so rateLimit /
+ * enforceRateLimit are awaited.
  *
  * Used to protect auth (brute-force) and AI endpoints (cost/abuse). Demo AI
  * budget is enforced separately, per-session, in the repository.
  */
 
+export interface RateResult {
+  allowed: boolean;
+  remaining: number;
+  retryAfterSec: number;
+}
+
 export interface RateStore {
-  /** Returns the bucket state for a key, creating it full if absent. */
-  take(key: string, capacity: number, refillPerSec: number, now: number): { allowed: boolean; remaining: number; retryAfterSec: number };
+  /** Consume one token for a key, creating its bucket full if absent. */
+  take(key: string, capacity: number, refillPerSec: number, now: number): Promise<RateResult>;
 }
 
 interface Bucket {
@@ -24,7 +32,7 @@ class MemoryRateStore implements RateStore {
     if (!g.__plRate) g.__plRate = new Map();
     this.buckets = g.__plRate;
   }
-  take(key: string, capacity: number, refillPerSec: number, now: number) {
+  async take(key: string, capacity: number, refillPerSec: number, now: number): Promise<RateResult> {
     const b = this.buckets.get(key) ?? { tokens: capacity, updated: now };
     const elapsed = (now - b.updated) / 1000;
     b.tokens = Math.min(capacity, b.tokens + elapsed * refillPerSec);
@@ -40,7 +48,62 @@ class MemoryRateStore implements RateStore {
   }
 }
 
-const store: RateStore = new MemoryRateStore();
+/**
+ * Distributed token bucket on Upstash Redis via its REST API — no client lib
+ * (one fetch, mirroring the Resend/Stripe/Gmail transports). A single EVAL runs
+ * the refill+consume atomically server-side, so it's correct across instances.
+ * Fails open (allow) if Redis is unreachable, so an outage degrades to local
+ * behavior rather than locking everyone out.
+ */
+const BUCKET_LUA = `
+local d = redis.call('HMGET', KEYS[1], 'tokens', 'updated')
+local cap = tonumber(ARGV[1])
+local refill = tonumber(ARGV[2])
+local now = tonumber(ARGV[3])
+local tokens = tonumber(d[1])
+local updated = tonumber(d[2])
+if tokens == nil then tokens = cap; updated = now end
+tokens = math.min(cap, tokens + ((now - updated) / 1000) * refill)
+local allowed = 0
+local retry = 0
+if tokens >= 1 then tokens = tokens - 1; allowed = 1
+else retry = math.ceil((1 - tokens) / refill) end
+redis.call('HMSET', KEYS[1], 'tokens', tokens, 'updated', now)
+redis.call('PEXPIRE', KEYS[1], 3600000)
+return {allowed, math.floor(tokens), retry}`;
+
+class UpstashRateStore implements RateStore {
+  constructor(private url: string, private token: string) {}
+  async take(key: string, capacity: number, refillPerSec: number, now: number): Promise<RateResult> {
+    try {
+      const res = await fetch(this.url, {
+        method: "POST",
+        headers: { authorization: `Bearer ${this.token}`, "content-type": "application/json" },
+        body: JSON.stringify(["EVAL", BUCKET_LUA, "1", key, String(capacity), String(refillPerSec), String(now)]),
+      });
+      if (!res.ok) throw new Error(`Upstash ${res.status}`);
+      const [allowed, remaining, retryAfterSec] = ((await res.json()) as { result: [number, number, number] }).result;
+      return { allowed: allowed === 1, remaining, retryAfterSec };
+    } catch {
+      // Fail open: a rate-limit backend outage must not take down the app.
+      return { allowed: true, remaining: capacity, retryAfterSec: 0 };
+    }
+  }
+}
+
+function selectStore(): RateStore {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (url && token) return new UpstashRateStore(url, token);
+  if (process.env.REDIS_URL) {
+    // A raw redis:// URL needs a TCP client (ioredis) we deliberately don't
+    // bundle; the dep-free path is Upstash's REST API. Use in-process meanwhile.
+    console.warn("[rate-limit] REDIS_URL is set but only the Upstash REST store is wired; using the in-process store. Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN for distributed limits.");
+  }
+  return new MemoryRateStore();
+}
+
+const store: RateStore = selectStore();
 
 export interface RateLimit {
   capacity: number;
@@ -54,13 +117,7 @@ export const LIMITS = {
   api: { capacity: 60, refillPerSec: 1 }, // 60/min general
 } as const;
 
-export interface RateResult {
-  allowed: boolean;
-  remaining: number;
-  retryAfterSec: number;
-}
-
-export function rateLimit(key: string, limit: RateLimit, now = Date.now()): RateResult {
+export function rateLimit(key: string, limit: RateLimit, now = Date.now()): Promise<RateResult> {
   return store.take(key, limit.capacity, limit.refillPerSec, now);
 }
 

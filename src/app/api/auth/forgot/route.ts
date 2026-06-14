@@ -13,7 +13,7 @@ const schema = z.object({ email: z.string().email() });
  */
 export async function POST(req: Request) {
   return handleApi(async () => {
-    enforceRateLimit(req, "forgot", LIMITS.auth);
+    await enforceRateLimit(req, "forgot", LIMITS.auth);
     const body = await parseBody(req, schema);
     const r = repo();
     const user = await r.findUserByEmail(body.email);

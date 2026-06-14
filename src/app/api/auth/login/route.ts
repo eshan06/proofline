@@ -12,12 +12,12 @@ const loginSchema = z.object({
 
 export async function POST(req: Request) {
   return handleApi(async () => {
-    enforceRateLimit(req, "login", LIMITS.auth);
+    await enforceRateLimit(req, "login", LIMITS.auth);
     const body = await parseBody(req, loginSchema);
 
     // Per-account throttle: bounds brute force against a single email even when
     // the attacker rotates IPs (the per-IP limit above can't catch that).
-    const acct = rateLimit(`login:acct:${body.email.toLowerCase()}`, LIMITS.auth);
+    const acct = await rateLimit(`login:acct:${body.email.toLowerCase()}`, LIMITS.auth);
     if (!acct.allowed) {
       throw new ApiError(429, `Too many attempts for this account — try again in ${acct.retryAfterSec}s.`);
     }
