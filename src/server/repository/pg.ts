@@ -339,14 +339,14 @@ export class PgRepository implements Repository {
       return this.getWorkspace(workspaceId);
     }
     const [tk, cust, kb, autos, intg, mem, aud, notif, cop] = await Promise.all([
-      db.select().from(s.tickets).where(eq(s.tickets.workspaceId, workspaceId)).orderBy(asc(s.tickets.sortOrder)),
-      db.select().from(s.customers).where(eq(s.customers.workspaceId, workspaceId)),
+      db.select().from(s.tickets).where(eq(s.tickets.workspaceId, workspaceId)).orderBy(asc(s.tickets.sortOrder)).limit(500),
+      db.select().from(s.customers).where(eq(s.customers.workspaceId, workspaceId)).limit(500),
       db.select().from(s.kbDocs).where(eq(s.kbDocs.workspaceId, workspaceId)).orderBy(asc(s.kbDocs.sortOrder)),
       db.select().from(s.automations).where(eq(s.automations.workspaceId, workspaceId)).orderBy(asc(s.automations.sortOrder)),
       db.select().from(s.integrations).where(eq(s.integrations.workspaceId, workspaceId)).orderBy(asc(s.integrations.sortOrder)),
       db.select().from(s.memberships).where(eq(s.memberships.workspaceId, workspaceId)),
-      db.select().from(s.auditEvents).where(eq(s.auditEvents.workspaceId, workspaceId)),
-      db.select().from(s.notifications).where(eq(s.notifications.workspaceId, workspaceId)).orderBy(asc(s.notifications.sortOrder)),
+      db.select().from(s.auditEvents).where(eq(s.auditEvents.workspaceId, workspaceId)).limit(200),
+      db.select().from(s.notifications).where(eq(s.notifications.workspaceId, workspaceId)).orderBy(asc(s.notifications.sortOrder)).limit(100),
       db.select().from(s.copilotSettings).where(eq(s.copilotSettings.workspaceId, workspaceId)).limit(1),
     ]);
 
@@ -413,6 +413,10 @@ export class PgRepository implements Repository {
     }
     const notif = await this.db.select().from(s.notifications).where(eq(s.notifications.workspaceId, workspaceId)).orderBy(asc(s.notifications.sortOrder));
     return { name: wsRow.name, notifications: notif.map((n) => ({ c: n.color, text: n.text, time: n.time })) };
+  }
+
+  async renameWorkspace(workspaceId: string, name: string): Promise<void> {
+    await this.db.update(s.workspaces).set({ name }).where(eq(s.workspaces.id, workspaceId));
   }
 
   async getKbDocs(workspaceId: string): Promise<KbDoc[]> {
@@ -493,7 +497,7 @@ export class PgRepository implements Repository {
     return t;
   }
 
-  private async saveTicket(workspaceId: string, t: Ticket): Promise<void> {
+  async saveTicket(workspaceId: string, t: Ticket): Promise<void> {
     await this.db
       .update(s.tickets)
       .set({
@@ -513,7 +517,7 @@ export class PgRepository implements Repository {
 
   async updateKbDoc(workspaceId: string, id: string, patch: Partial<KbDoc>): Promise<KbDoc> {
     const fullId = id.startsWith(workspaceId) ? id : `${workspaceId}_${id}`;
-    await this.db.update(s.kbDocs).set({ ...(patch.status && { status: patch.status }), ...(patch.chunks && { chunks: patch.chunks }), ...(patch.cited && { cited: patch.cited }), ...(patch.synced && { synced: patch.synced }) }).where(and(eq(s.kbDocs.workspaceId, workspaceId), eq(s.kbDocs.id, fullId)));
+    await this.db.update(s.kbDocs).set({ ...(patch.status !== undefined && { status: patch.status }), ...(patch.chunks !== undefined && { chunks: patch.chunks }), ...(patch.cited !== undefined && { cited: patch.cited }), ...(patch.synced !== undefined && { synced: patch.synced }) }).where(and(eq(s.kbDocs.workspaceId, workspaceId), eq(s.kbDocs.id, fullId)));
     const [row] = await this.db.select().from(s.kbDocs).where(eq(s.kbDocs.id, fullId)).limit(1);
     if (!row) throw new NotFoundError(`Unknown document ${id}`);
     return { id: stripPrefix(row.id, workspaceId), name: row.name, source: row.source, status: row.status as KbDoc["status"], chunks: row.chunks, cited: row.cited, synced: row.synced };

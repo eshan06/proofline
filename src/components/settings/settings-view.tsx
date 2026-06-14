@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { useWorkspace, useWorkspaceMutation } from "@/hooks/use-workspace";
+import { useWorkspace, useWorkspaceMutation, WORKSPACE_KEY } from "@/hooks/use-workspace";
 import { useEscToClose } from "@/hooks/use-esc";
 import { api } from "@/lib/api-client";
 import { toast } from "@/stores/toasts";
@@ -140,6 +141,23 @@ function WorkspaceTab({ initialName }: { initialName: string }) {
   const [name, setName] = useState(initialName);
   const [confirmDelete, setConfirmDelete] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
+
+  const saveName = async () => {
+    const trimmed = name.trim();
+    if (!trimmed || saving) return;
+    setSaving(true);
+    try {
+      await api.renameWorkspace(trimmed);
+      await queryClient.invalidateQueries({ queryKey: WORKSPACE_KEY });
+      toast("Workspace name updated");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Couldn't update workspace");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const doDelete = async () => {
     if (confirmDelete !== "DELETE") return;
@@ -161,7 +179,7 @@ function WorkspaceTab({ initialName }: { initialName: string }) {
           <span className="text-[11px] font-semibold text-ink-4">Name</span>
           <input value={name} onChange={(e) => setName(e.target.value)} className="pl-focus rounded-[7px] border border-white/9 bg-white/[0.035] px-3 py-2 text-[12.5px] text-ink" />
         </div>
-        <button type="button" onClick={() => toast("Workspace settings saved")} className="self-start rounded-[7px] border-0 bg-accent px-4 py-[7px] text-[12px] font-semibold text-white hover:bg-accent-hover">Save changes</button>
+        <button type="button" disabled={saving || !name.trim() || name.trim() === initialName} onClick={saveName} className="self-start rounded-[7px] border-0 bg-accent px-4 py-[7px] text-[12px] font-semibold text-white hover:bg-accent-hover disabled:opacity-50">{saving ? "Saving…" : "Save changes"}</button>
       </div>
 
       <div className="flex items-center gap-3 rounded-[11px] border border-white/7 bg-card px-[18px] py-4">
@@ -315,14 +333,20 @@ function InviteModal({ onClose }: { onClose: () => void }) {
     onSuccessToast: ({ email }) => `Invite sent to ${email}`,
   });
 
-  const send = () => {
+  const send = async () => {
     const em = email.trim();
     if (!em || !em.includes("@")) {
       toast("Enter a valid email address");
       return;
     }
-    invite.mutate({ email: em, role });
-    onClose();
+    try {
+      // Close only on success — on failure useWorkspaceMutation toasts the error
+      // and we keep the modal open with the entered values.
+      await invite.mutateAsync({ email: em, role });
+      onClose();
+    } catch {
+      /* error surfaced via the mutation's onError toast; modal stays open */
+    }
   };
 
   return (
@@ -362,8 +386,8 @@ function InviteModal({ onClose }: { onClose: () => void }) {
             })}
           </div>
         </div>
-        <button type="button" onClick={send} className="rounded-[8px] border-0 bg-accent py-[9px] text-[12.5px] font-semibold text-white hover:bg-accent-hover" style={{ boxShadow: "0 2px 12px rgba(77,124,254,0.3)" }}>
-          Send invite
+        <button type="button" onClick={send} disabled={invite.isPending} className="rounded-[8px] border-0 bg-accent py-[9px] text-[12.5px] font-semibold text-white hover:bg-accent-hover disabled:opacity-60" style={{ boxShadow: "0 2px 12px rgba(77,124,254,0.3)" }}>
+          {invite.isPending ? "Sending…" : "Send invite"}
         </button>
       </div>
     </div>

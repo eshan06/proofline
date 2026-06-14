@@ -397,6 +397,10 @@ export const inviteMemberSchema = z.object({
   role: memberRoleSchema,
 });
 
+export const workspacePatchSchema = z.object({
+  name: z.string().min(1).max(80),
+});
+
 export const copilotPatchSchema = copilotSettingsSchema.partial();
 
 export const eventSchema = z.object({

@@ -96,7 +96,11 @@ export function KbView() {
         <div className="flex items-end gap-3">
           <div className="flex flex-col gap-[3px]">
             <div className="text-[19px] font-semibold tracking-[-0.02em] text-ink">Knowledge Base</div>
-            <div className="text-[12px] text-muted">Everything the AI is allowed to cite. 7 sources · 161 chunks indexed</div>
+            <div className="text-[12px] text-muted">
+              {docs.length === 0
+                ? "Everything the AI is allowed to cite — upload docs to get started."
+                : `Everything the AI is allowed to cite. ${docs.length} source${docs.length === 1 ? "" : "s"} · ${docs.reduce((n, d) => n + (parseInt(d.chunks, 10) || 0), 0)} chunks indexed`}
+            </div>
           </div>
           <span className="flex-1" />
           <button

@@ -46,16 +46,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     // The low-confidence safety net watches every draft generation.
     const customerPlan = seedCustomers.find((c) => c.name === ticket.customer.name)?.plan;
     const automations = await r.getAutomations(session.workspaceId);
+    let fired = false;
     for (const res of runAutomations(automations, {
       kind: "draft.generated",
-      ticket: updated,
+      ticket: updated, // automations mutate this in place (tags/status/stage/assignee)
       confidence: result.draft.confidence,
       customerPlan,
     })) {
       if (res.fired && res.logLine) {
         await r.recordAutomationRun(session.workspaceId, res.automation.id, { time: "just now", text: res.logLine, ok: true });
+        fired = true;
       }
     }
+    // Persist the automation-driven mutations (escalate/tag/reassign) — otherwise
+    // setDraft above already saved the pre-automation state and they'd be lost.
+    if (fired) await r.saveTicket(session.workspaceId, updated);
 
     return updated;
   });

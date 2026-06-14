@@ -98,6 +98,9 @@ export const api = {
 
   deleteAccount: () => request("/api/account/delete", { method: "POST" }),
 
+  renameWorkspace: (name: string) =>
+    request("/api/workspace", { method: "PATCH", body: JSON.stringify({ name }) }),
+
   checkout: (plan: "growth" | "scale") =>
     request<{ url: string }>("/api/billing/checkout", { method: "POST", body: JSON.stringify({ plan }) }),
 };

@@ -317,6 +317,10 @@ export class MemoryRepository implements Repository {
     return { name: d.name, notifications: d.notifications };
   }
 
+  async renameWorkspace(workspaceId: string, name: string): Promise<void> {
+    this.ws(workspaceId).name = name;
+  }
+
   async getKbDocs(workspaceId: string): Promise<KbDoc[]> {
     return this.ws(workspaceId).kbDocs;
   }
@@ -376,6 +380,13 @@ export class MemoryRepository implements Repository {
     const t = this.ticket(workspaceId, id);
     t.draft = draft;
     return t;
+  }
+
+  async saveTicket(workspaceId: string, ticket: Ticket): Promise<void> {
+    // In-memory tickets are mutated in place (the live object), so persistence
+    // is implicit; assign defensively in case a detached copy was passed.
+    const t = this.ws(workspaceId).tickets.find((x) => x.id === ticket.id);
+    if (t && t !== ticket) Object.assign(t, ticket);
   }
 
   /* knowledge base ------------------------------------------------------- */

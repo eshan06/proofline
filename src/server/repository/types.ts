@@ -116,6 +116,7 @@ export interface Repository {
   getWorkspace(workspaceId: string): Promise<Workspace>;
   /** Light shell data (name + notifications) for fast first paint. */
   getShell(workspaceId: string): Promise<{ name: string; notifications: Notification[] }>;
+  renameWorkspace(workspaceId: string, name: string): Promise<void>;
   getKbDocs(workspaceId: string): Promise<KbDoc[]>;
   getAutomations(workspaceId: string): Promise<Automation[]>;
   getCopilot(workspaceId: string): Promise<CopilotSettings>;
@@ -126,6 +127,8 @@ export interface Repository {
   addReply(workspaceId: string, id: string, text: string, viaAI: boolean, actor: string): Promise<Ticket>;
   addNote(workspaceId: string, id: string, text: string, actor: string): Promise<Ticket>;
   setDraft(workspaceId: string, id: string, draft: AIDraft): Promise<Ticket>;
+  /** Persist the full mutated ticket (e.g. after automations change tags/status). */
+  saveTicket(workspaceId: string, ticket: Ticket): Promise<void>;
 
   /* knowledge base */
   addKbDoc(workspaceId: string, doc: Omit<KbDoc, "id">): Promise<KbDoc>;
