@@ -66,7 +66,7 @@ Legend: ✅ done & tested · 🔌 built, needs your credentials to go live · �
 - Structured JSON logging, `/api/health` (liveness) + `/api/health/ready`
   (readiness — pings Postgres in DB mode), GitHub Actions CI (typecheck/lint/test/build + e2e).
 - Dockerfile (standalone, non-root, healthcheck) + docker-compose (app + pgvector).
-- 63 unit tests + 7 E2E.
+- 101 unit tests + 3 Postgres integration tests (concurrency; skipped without a DB) + 7 E2E.
 
 ### Identity & data integrity ✅
 - The **real signed-in user** drives the app shell (sidebar, topbar, home greeting)
@@ -76,6 +76,28 @@ Legend: ✅ done & tested · 🔌 built, needs your credentials to go live · �
   — a mid-seed failure can't orphan a user or leave a half-workspace; corpus
   embedding runs after commit, best-effort.
 - **Real audit events** recorded on member invites and integration connect/disconnect.
+
+### Reliability ✅
+- **Concurrency-safe ticket writes**: every Postgres read-modify-write on a ticket
+  (reply, note, status patch, draft, inbound-email append) runs `SELECT … FOR UPDATE`
+  inside a transaction, so concurrent writers can't clobber each other's messages
+  (the lost-update race). `saveTicket` merges messages by id; the draft route persists
+  only automation-changed fields. **Proven** by an integration test against real
+  Postgres: 20 concurrent replies all retained, concurrent new-thread email ingest →
+  exactly one ticket, dup message-ids deduped.
+- **Inbound-email ingest** is one transaction with `ON CONFLICT DO NOTHING` thread
+  creation (no orphan tickets / no PK-violation aborting a batch) — safe under
+  concurrent polling / Pub/Sub push; the poll loop isolates per-message failures.
+- **Distributed rate limiting** seam: in-process by default; set
+  `UPSTASH_REDIS_REST_URL` + `_TOKEN` for a dep-free Upstash token-bucket (atomic
+  Lua EVAL, correct across instances, fails open on outage).
+- **Error-tracking** seam: `logger.setErrorSink()` forwards every `reportError` to an
+  optional sink (Sentry/APM); `instrumentation.ts` documents the build-safe wiring.
+- **DB TLS**: `DB_CA_CERT` (provider CA bundle) enables strict verification without
+  `NODE_EXTRA_CA_CERTS`; an unverified remote connection logs a one-time MITM warning.
+- **RDS**: 7-day automated backups + PITR ✅, **deletion protection enabled** ✅.
+  Gaps (need a disruptive migration / cost, deferred): storage encryption-at-rest
+  (snapshot→encrypted-restore), Multi-AZ failover, read replica.
 
 ---
 
@@ -133,11 +155,14 @@ so nothing crashes without a key — set the env var to go live.
 
 **Ops**
 - ✅ Graceful shutdown (SIGTERM drains the pool), `/api/health/ready` readiness
-  probe, error reporting seam (`logger.reportError` → `ERROR_WEBHOOK_URL`).
-- Managed Postgres (RDS) with backups/PITR + read replica; Redis for rate limits
-  and sessions across instances (the in-process token-bucket store is correct for a
-  single instance but multiplies limits per replica) — remaining.
-- Full Sentry/OTel metrics + alerting; load testing; autoscaling; CDN — remaining.
+  probe, error reporting seam (`logger.reportError` → `ERROR_WEBHOOK_URL` + pluggable
+  `setErrorSink` for Sentry/APM).
+- ✅ Concurrency-safe ticket writes (row-locked); ✅ RDS backups/PITR + deletion
+  protection; ✅ distributed rate-limit store seam (Upstash REST); ✅ strict-TLS via
+  `DB_CA_CERT`.
+- Remaining: activate Redis/Sentry by setting env (seams shipped); sessions across
+  instances are already DB-backed; RDS storage encryption-at-rest + Multi-AZ + read
+  replica (disruptive/cost — deferred); OTel metrics, load testing, autoscaling, CDN.
 
 **Product polish**
 - ✅ Real signed-in user in the app shell (name/email/initials/role) + real reply authorship.
@@ -157,8 +182,12 @@ The thin vertical slice that turns this into a sellable product, in order:
 3. ✅ **One real channel** — website chat widget, end-to-end (inbound + outbound).
 4. ✅ **Stripe** — signature-verified webhook + plan/seat gating (set keys + price ids to charge).
 5. ✅ **Email verification + password reset** — shipped (set `EMAIL_PROVIDER=resend` to deliver).
-6. **Remaining to harden**: Redis (multi-instance limits/sessions), full Sentry/metrics,
-   RDS backups/PITR, Gmail/Slack channels, OAuth/SSO, counsel-reviewed legal copy.
+6. ✅ **Reliability hardened**: row-locked concurrent ticket writes (proven against
+   real Postgres), RDS backups/PITR + deletion protection, distributed rate-limit
+   (Upstash) + error-sink (Sentry) + strict-TLS seams.
+7. ✅ **Gmail channel** (inbound + outbound) — dormant until Google OAuth creds; see DEPLOY.md.
+8. **Remaining**: activate Redis/Sentry via env, Slack channel, OAuth/SSO,
+   RDS encryption-at-rest + Multi-AZ, OTel metrics, counsel-reviewed legal copy.
 
 Everything in steps 1–4 is already scaffolded with interfaces and tests; the work
 is filling the marked TODO branches and connecting your accounts.
