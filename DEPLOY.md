@@ -91,6 +91,15 @@ docker run -p 3000:3000 --env-file .env.production proofline
   add a webhook endpoint pointing at `https://<domain>/api/billing/webhook` (events:
   `checkout.session.completed`, `customer.subscription.created/updated/deleted`) and put its
   signing secret in `STRIPE_WEBHOOK_SECRET`.
+- **Slack channel (inbound + outbound):** dormant until configured. Create a Slack
+  app: bot scopes `channels:history, groups:history, im:history, chat:write,
+  users:read`; enable OAuth with redirect `https://<domain>/api/integrations/slack/callback`;
+  enable the Events API with request URL `https://<domain>/api/integrations/slack/events`
+  and subscribe to `message.channels`. Set `SLACK_SIGNING_SECRET` (verifies inbound)
+  + `SLACK_CLIENT_ID`/`SLACK_CLIENT_SECRET` (install flow). An admin then clicks
+  **Integrations → Slack → Connect**. Messages in subscribed channels become tickets;
+  agent replies post back to the thread. Inbound is push (no polling) and idempotent
+  (deduped by event ts); the webhook verifies every request's Slack signature.
 - **Gmail channel (inbound + outbound email):** dormant until configured.
   1. In Google Cloud: create a project, enable the **Gmail API**, configure the
      OAuth consent screen, and create an **OAuth client (Web application)**.

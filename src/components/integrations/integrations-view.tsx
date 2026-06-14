@@ -6,13 +6,22 @@ import { useToggleIntegration } from "@/hooks/use-integrations";
 import { toast } from "@/stores/toasts";
 import type { Integration, IntegrationKey, WidgetConfig } from "@/lib/schemas";
 
-const GMAIL_RESULT_TOAST: Record<string, string> = {
-  connected: "Gmail connected — inbound email now becomes tickets.",
-  unconfigured: "Gmail isn't configured on this deployment yet.",
-  forbidden: "Only admins can connect Gmail.",
-  denied: "Gmail connection was cancelled.",
-  error: "Couldn't connect Gmail — please try again.",
-};
+/** OAuth-channel keys that connect via a redirect round-trip (not a boolean flip). */
+const OAUTH_CHANNELS: { key: IntegrationKey; label: string }[] = [
+  { key: "gmail", label: "Gmail" },
+  { key: "slack", label: "Slack" },
+];
+
+function oauthResultMessage(label: string, result: string): string | null {
+  switch (result) {
+    case "connected": return `${label} connected.`;
+    case "unconfigured": return `${label} isn't configured on this deployment yet.`;
+    case "forbidden": return `Only admins can connect ${label}.`;
+    case "denied": return `${label} connection was cancelled.`;
+    case "error": return `Couldn't connect ${label} — please try again.`;
+    default: return null;
+  }
+}
 
 export function IntegrationsView() {
   const { data: ws } = useWorkspace();
@@ -20,23 +29,28 @@ export function IntegrationsView() {
   const toggle = useToggleIntegration();
   const [openPanel, setOpenPanel] = useState<IntegrationKey | "">("webchat");
 
-  // Surface the result of the Gmail OAuth round-trip (callback redirects with ?gmail=…),
-  // then strip the param so a refresh doesn't re-toast.
+  // Surface the result of an OAuth round-trip (callback redirects with ?gmail=… /
+  // ?slack=…), then strip the param so a refresh doesn't re-toast.
   useEffect(() => {
-    const result = new URLSearchParams(window.location.search).get("gmail");
-    if (!result) return;
-    const msg = GMAIL_RESULT_TOAST[result];
-    if (msg) toast(msg);
-    if (result === "connected") setOpenPanel("gmail");
-    window.history.replaceState(null, "", window.location.pathname);
+    const params = new URLSearchParams(window.location.search);
+    let matched = false;
+    for (const { key, label } of OAUTH_CHANNELS) {
+      const result = params.get(key);
+      if (!result) continue;
+      matched = true;
+      const msg = oauthResultMessage(label, result);
+      if (msg) toast(msg);
+      if (result === "connected") setOpenPanel(key);
+    }
+    if (matched) window.history.replaceState(null, "", window.location.pathname);
   }, []);
 
   const connectedCount = integrations.filter((i) => i.connected).length;
 
   const onToggle = (g: Integration) => {
-    // Gmail uses a real OAuth round-trip, not a boolean flip.
-    if (g.key === "gmail" && !g.connected) {
-      window.location.href = "/api/integrations/gmail/connect";
+    // Gmail/Slack connect via a real OAuth round-trip, not a boolean flip.
+    if (OAUTH_CHANNELS.some((c) => c.key === g.key) && !g.connected) {
+      window.location.href = `/api/integrations/${g.key}/connect`;
       return;
     }
     const next = !g.connected;
@@ -240,23 +254,21 @@ function GmailPanel({ onClose }: { onClose: () => void }) {
 }
 
 function SlackPanel({ onClose }: { onClose: () => void }) {
-  const routes: [string, string][] = [
-    ["#support", "Inbox · all messages"],
-    ["#billing-alerts", "Billing team only"],
-    ["#vip-customers", "High priority + VIP tag"],
-  ];
   return (
-    <PanelShell title="Slack setup" badge="2 workspaces" badgeColor="#3DD68C" badgeBg="rgba(61,214,140,0.1)" onClose={onClose}>
-      <div className="flex flex-col gap-2.5 px-[18px] py-4">
-        <span className="text-[11px] font-semibold text-ink-4">Channel routing</span>
-        {routes.map(([ch, rule]) => (
-          <div key={ch} className="flex items-center gap-2.5 rounded-[9px] border border-white/7 bg-white/[0.025] px-[13px] py-[9px]">
-            <span className="font-mono text-[12px] text-violet-soft">{ch}</span>
-            <span className="font-mono text-[10px] text-muted">→</span>
-            <span className="text-[12px] text-ink-3">{rule}</span>
+    <PanelShell title="Slack setup" badge="Connected" badgeColor="#3DD68C" badgeBg="rgba(61,214,140,0.1)" onClose={onClose}>
+      <div className="flex flex-col gap-[13px] px-[18px] py-4">
+        <div className="flex items-center gap-[11px] rounded-[10px] border border-white/7 bg-white/[0.025] px-3.5 py-[11px]">
+          <div className="flex h-[30px] w-[30px] items-center justify-center rounded-full font-mono text-[13px] font-semibold" style={{ background: "rgba(139,92,246,0.15)", color: "#C4B0F8" }}>#</div>
+          <div className="flex min-w-0 flex-col gap-px">
+            <span className="text-[12.5px] font-medium text-ink">Slack connected</span>
+            <span className="text-[10.5px] text-muted">Messages in your channels become tickets; agent replies post back to the thread.</span>
           </div>
-        ))}
-        <button type="button" onClick={() => toast("Channel routing editor")} className="self-start rounded-[8px] border border-dashed border-white/15 px-[13px] py-1.5 text-[11.5px] text-ink-4 hover:border-accent/40 hover:text-accent-soft">+ Add routing rule</button>
+        </div>
+        <p className="text-[11px] leading-[1.6] text-muted">
+          Point your Slack app&apos;s Events API request URL at
+          <span className="mx-1 rounded bg-white/8 px-1.5 py-0.5 font-mono text-[10.5px] text-ink-3">/api/integrations/slack/events</span>
+          and subscribe to <span className="font-mono text-[10.5px] text-ink-3">message.channels</span>. Disconnecting forgets the stored bot token.
+        </p>
       </div>
     </PanelShell>
   );
