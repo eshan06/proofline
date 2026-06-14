@@ -1,7 +1,5 @@
 import type {
   AuditEvent,
-  AnalyticsRangeKey,
-  AnalyticsRange,
   Automation,
   CopilotSettings,
   Customer,
@@ -230,57 +228,6 @@ export const builderActions = [
   "Notify #support-oncall in Slack",
   "Assign to senior agent",
 ];
-
-export const analyticsData: Record<AnalyticsRangeKey, AnalyticsRange> = {
-  "7d": {
-    l0: "Jun 6",
-    l1: "Jun 12",
-    metrics: [
-      ["Tickets", "164", "+12%", "#3DD68C"],
-      ["Median first response", "4m 12s", "−38s", "#3DD68C"],
-      ["AI acceptance", "87%", "+2.4 pts", "#3DD68C"],
-      ["SLA breaches", "3", "−2 vs last week", "#3DD68C"],
-    ],
-    vol: [[18, 9], [22, 10], [16, 8], [25, 11], [21, 9], [24, 10], [28, 11]],
-    frt: [6.8, 5.9, 6.2, 5.1, 4.6, 4.9, 4.2],
-    dist: [4, 11, 32, 58, 109],
-    tags: [["billing", 54], ["bug", 38], ["how-to", 31], ["login", 22], ["feature-request", 14], ["enterprise", 5]],
-    docs: [["Getting started.md", 208], ["Billing & Plans.md", 132], ["Refund policy.pdf", 97], ["Bug response playbook.md", 55], ["Stripe sync runbook.md", 41]],
-    lead: [["Maya", 61, "91%", "3m 48s"], ["Eshan", 54, "86%", "4m 05s"], ["Leo", 49, "84%", "4m 41s"]],
-  },
-  "14d": {
-    l0: "May 30",
-    l1: "Jun 12",
-    metrics: [
-      ["Tickets", "318", "+9%", "#3DD68C"],
-      ["Median first response", "4m 31s", "−1m 02s", "#3DD68C"],
-      ["AI acceptance", "85%", "+4.1 pts", "#3DD68C"],
-      ["SLA breaches", "8", "−3", "#3DD68C"],
-    ],
-    vol: [[18, 9], [22, 10], [16, 8], [25, 11], [21, 9], [12, 6], [10, 5], [24, 10], [28, 11], [23, 9], [31, 12], [26, 10], [29, 11], [34, 12]],
-    frt: [7.9, 7.2, 7.6, 6.8, 6.1, 6.5, 5.8, 6.8, 5.9, 6.2, 5.1, 4.6, 4.9, 4.2],
-    dist: [9, 24, 61, 118, 204],
-    tags: [["billing", 96], ["bug", 71], ["how-to", 64], ["login", 41], ["feature-request", 28], ["enterprise", 11]],
-    docs: [["Getting started.md", 391], ["Billing & Plans.md", 246], ["Refund policy.pdf", 173], ["Bug response playbook.md", 102], ["Stripe sync runbook.md", 74]],
-    lead: [["Maya", 118, "89%", "4m 02s"], ["Eshan", 103, "85%", "4m 19s"], ["Leo", 94, "83%", "4m 56s"]],
-  },
-  "30d": {
-    l0: "May 13",
-    l1: "Jun 12",
-    metrics: [
-      ["Tickets", "702", "+18%", "#3DD68C"],
-      ["Median first response", "5m 04s", "−2m 11s", "#3DD68C"],
-      ["AI acceptance", "82%", "+7.6 pts", "#3DD68C"],
-      ["SLA breaches", "21", "+2", "#F36C6C"],
-    ],
-    vol: [[14, 8], [17, 9], [15, 8], [19, 10], [16, 8], [21, 10], [18, 9], [22, 10], [16, 8], [25, 11], [21, 9], [24, 10], [28, 11], [31, 12], [34, 12]],
-    frt: [9.4, 8.8, 9.1, 8.2, 7.6, 8.0, 7.1, 7.5, 6.8, 6.1, 5.8, 5.1, 4.9, 4.6, 4.2],
-    dist: [22, 58, 134, 247, 411],
-    tags: [["billing", 203], ["bug", 156], ["how-to", 141], ["login", 88], ["feature-request", 64], ["enterprise", 23]],
-    docs: [["Getting started.md", 812], ["Billing & Plans.md", 519], ["Refund policy.pdf", 387], ["Bug response playbook.md", 218], ["Stripe sync runbook.md", 159]],
-    lead: [["Maya", 251, "86%", "4m 38s"], ["Eshan", 226, "83%", "5m 01s"], ["Leo", 204, "81%", "5m 22s"]],
-  },
-};
 
 /** Initial connected state from the prototype's `intgConn`. */
 export const seedIntegrations: Integration[] = [

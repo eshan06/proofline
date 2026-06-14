@@ -15,7 +15,8 @@ export function isInboxFilter(value: string | null | undefined): value is InboxF
   return !!value && (INBOX_FILTERS as readonly string[]).includes(value);
 }
 
-const isSlaRisk = (t: Ticket) => t.slaMins > 0 && t.slaMins <= 45;
+/** A ticket whose first-response SLA is at risk (due within 45m, not yet met). */
+export const isSlaRisk = (t: Ticket) => t.slaMins > 0 && t.slaMins <= 45;
 
 /** The live (non-archived) tickets the inbox shows; archived live in Tickets. */
 export function inboxTickets(tickets: Ticket[]): Ticket[] {

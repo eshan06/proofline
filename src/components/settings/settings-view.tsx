@@ -9,6 +9,7 @@ import { useEscToClose } from "@/hooks/use-esc";
 import { api } from "@/lib/api-client";
 import { toast } from "@/stores/toasts";
 import { agents } from "@/data/workspace";
+import { billingUsage, type UsageStat } from "@/lib/metrics";
 import type { AuditEvent, Member, MemberRole, Subscription } from "@/lib/schemas";
 
 const TABS = [
@@ -33,19 +34,6 @@ const PERM_ROWS: [string, string, string, string][] = [
   ["Edit knowledge base", "✓", "✓", "—"],
   ["Manage automations", "✓", "—", "—"],
   ["Billing & members", "✓", "—", "—"],
-];
-
-const USAGE: [string, string, string][] = [
-  ["Tickets handled", "1,284 / ∞", "62%"],
-  ["AI replies generated", "842 / ∞", "41%"],
-  ["Docs indexed", "7 / 100", "7%"],
-  ["Team seats", "3 / 10", "30%"],
-];
-
-const INVOICES: [string, string, string][] = [
-  ["May 2026", "$147.00", "Paid"],
-  ["Apr 2026", "$147.00", "Paid"],
-  ["Mar 2026", "$98.00", "Paid"],
 ];
 
 export function SettingsView({ tab }: { tab: Tab }) {
@@ -80,7 +68,7 @@ export function SettingsView({ tab }: { tab: Tab }) {
 
         {tab === "team" ? <TeamTab members={members} onInvite={() => setInviteOpen(true)} /> : null}
         {tab === "workspace" ? <WorkspaceTab initialName={ws?.name ?? "Acme Inc"} /> : null}
-        {tab === "billing" ? <BillingTab subscription={ws?.subscription} /> : null}
+        {tab === "billing" ? <BillingTab subscription={ws?.subscription} usage={ws ? billingUsage(ws) : []} /> : null}
         {tab === "audit" ? <AuditTab audit={audit} filter={auditFilter} setFilter={setAuditFilter} /> : null}
       </div>
 
@@ -216,7 +204,7 @@ function WorkspaceTab({ initialName }: { initialName: string }) {
   );
 }
 
-function BillingTab({ subscription }: { subscription?: Subscription }) {
+function BillingTab({ subscription, usage }: { subscription?: Subscription; usage: UsageStat[] }) {
   const plan = subscription?.plan ?? "Growth";
   const used = subscription?.seatsUsed ?? 0;
   const limit = subscription?.seatLimit ?? 0;
@@ -249,29 +237,28 @@ function BillingTab({ subscription }: { subscription?: Subscription }) {
         )}
       </div>
       <div className="grid grid-cols-4 gap-3">
-        {USAGE.map((u) => (
-          <div key={u[0]} className="flex flex-col gap-2 rounded-[11px] border border-white/7 bg-card px-[15px] py-[13px]">
-            <span className="text-[11px] text-muted">{u[0]}</span>
-            <span className="font-mono text-[15px] font-semibold text-ink">{u[1]}</span>
-            <div className="h-1 overflow-hidden rounded-full bg-white/6">
-              <div className="h-full rounded-full bg-accent" style={{ width: u[2] }} />
-            </div>
+        {usage.map((u) => (
+          <div key={u.label} className="flex flex-col gap-2 rounded-[11px] border border-white/7 bg-card px-[15px] py-[13px]">
+            <span className="text-[11px] text-muted">{u.label}</span>
+            <span className="font-mono text-[15px] font-semibold text-ink">{u.value}</span>
+            {u.ratio != null ? (
+              <div className="h-1 overflow-hidden rounded-full bg-white/6">
+                <div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(u.ratio * 100)}%` }} />
+              </div>
+            ) : (
+              <span className="text-[10px] text-faint">all-time</span>
+            )}
           </div>
         ))}
       </div>
       <div className="overflow-hidden rounded-[11px] border border-white/7 bg-card">
         <div className="flex items-center border-b border-white/6 px-4 py-3">
           <span className="text-[13px] font-semibold text-ink">Invoices</span>
-          <span className="ml-auto text-[11px] text-muted">Visa · ···· 4242</span>
         </div>
-        {INVOICES.map((iv) => (
-          <button key={iv[0]} type="button" onClick={() => toast("Invoice PDF download")} className="flex w-full cursor-pointer items-center gap-3 border-b border-white/[0.04] px-4 py-2.5 text-left hover:bg-white/[0.025]">
-            <span className="flex-1 text-[12.5px] text-[#D6DCE8]">{iv[0]}</span>
-            <span className="font-mono text-[12px] text-ink">{iv[1]}</span>
-            <span className="rounded-full bg-success/[0.08] px-[9px] py-0.5 text-[10.5px] text-success">{iv[2]}</span>
-            <span className="font-mono text-[10px] text-faint">PDF ↓</span>
-          </button>
-        ))}
+        <div className="px-4 py-5 text-[12px] leading-[1.6] text-muted">
+          Invoices and payment methods are managed in Stripe. Once your first
+          payment is processed they’ll appear in your Stripe billing portal.
+        </div>
       </div>
     </div>
   );
