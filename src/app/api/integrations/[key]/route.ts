@@ -1,10 +1,11 @@
 import { integrationKeySchema, integrationPatchSchema } from "@/lib/schemas";
-import { ApiError, actorName, handleApi, parseBody, requireSession, trackEvent } from "@/server/api";
+import { ApiError, actorName, handleApi, parseBody, requireSession, requireRole, trackEvent } from "@/server/api";
 import { repo } from "@/server/repository";
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ key: string }> }) {
   return handleApi(async () => {
     const session = await requireSession();
+    await requireRole(session, ["Admin"]);
     const { key } = await ctx.params;
     const parsedKey = integrationKeySchema.safeParse(key);
     if (!parsedKey.success) throw new ApiError(404, `Unknown integration ${key}`);

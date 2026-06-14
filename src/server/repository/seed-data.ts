@@ -55,12 +55,37 @@ export interface WorkspaceData {
 
 const clone = <T>(v: T): T => structuredClone(v);
 
-export function seedWorkspaceData(name = "Acme Inc"): WorkspaceData {
-  return {
+/**
+ * A fresh workspace's dataset. `empty` (real signups) yields a clean workspace —
+ * no demo tickets/customers/KB/automations/audit — so a new paying user doesn't
+ * land in a fake "Acme Inc" full of someone else's data. The channel catalog is
+ * present but disconnected, copilot has sane defaults, and a single welcome
+ * notification greets them. The full fixture seed is reserved for the demo
+ * sandbox (and the showcase "failed SSO" cross-page thread).
+ */
+export function seedWorkspaceData(name = "Acme Inc", opts: { empty?: boolean } = {}): WorkspaceData {
+  const base = {
     name,
-    // Fresh per workspace, not cloned from a shared fixture.
     widget: { siteKey: secureToken(16), enabled: true, allowedOrigins: [] },
-    subscription: { plan: "Growth", status: "active", seats: 3, currentPeriodEnd: "", stripeCustomerId: null, stripeSubscriptionId: null },
+    subscription: { plan: "Growth", status: "active", seats: 3, currentPeriodEnd: "", stripeCustomerId: null, stripeSubscriptionId: null } as SubscriptionData,
+    copilot: clone(seedCopilotSettings),
+  };
+  if (opts.empty) {
+    return {
+      ...base,
+      tickets: [],
+      customers: [],
+      kbDocs: [],
+      automations: [],
+      // Channels available to connect, but none connected yet.
+      integrations: clone(seedIntegrations).map((i) => ({ ...i, connected: false, last: "" })),
+      members: [],
+      audit: [],
+      notifications: [{ c: "#5B8DEF", text: "Welcome to Proofline — connect a channel and upload docs to get started.", time: "just now" }],
+    };
+  }
+  return {
+    ...base,
     ...clone({
       tickets: seedTickets,
       customers: seedCustomers,
@@ -70,7 +95,6 @@ export function seedWorkspaceData(name = "Acme Inc"): WorkspaceData {
       members: seedMembers,
       audit: seedAudit,
       notifications: seedNotifications,
-      copilot: seedCopilotSettings,
     }),
   };
 }

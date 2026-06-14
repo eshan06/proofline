@@ -1,4 +1,4 @@
-import { and, eq, asc, inArray } from "drizzle-orm";
+import { and, eq, asc, inArray, sql, or, ne, lt } from "drizzle-orm";
 import { getDb, type Db } from "@/server/db/client";
 import * as s from "@/server/db/schema";
 import type {
@@ -49,8 +49,8 @@ export class PgRepository implements Repository {
    * transaction). Pure DB writes — no corpus embedding — so the caller can run
    * it atomically inside a transaction.
    */
-  private async seedWorkspaceRows(exec: Executor, workspaceId: string, name: string): Promise<void> {
-    const d = seedWorkspaceData(name);
+  private async seedWorkspaceRows(exec: Executor, workspaceId: string, name: string, empty = false): Promise<void> {
+    const d = seedWorkspaceData(name, { empty });
     const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workspace"}-${workspaceId.slice(-6)}`;
     await exec.insert(s.workspaces).values({ id: workspaceId, name: d.name, slug, plan: "Growth", widgetSiteKey: secureToken(16) });
     await exec.insert(s.copilotSettings).values({
@@ -174,11 +174,19 @@ export class PgRepository implements Repository {
   }
 
   async consumeAiCall(sessionId: string): Promise<boolean> {
-    const [row] = await this.db.select().from(s.sessions).where(eq(s.sessions.id, sessionId)).limit(1);
-    if (!row) return true;
-    if (row.type === "demo" && row.aiCalls >= DEMO_AI_CALL_LIMIT) return false;
-    await this.db.update(s.sessions).set({ aiCalls: row.aiCalls + 1 }).where(eq(s.sessions.id, sessionId));
-    return true;
+    // Atomic: increment only if the session is non-demo, or a demo session still
+    // under budget. A single conditional UPDATE avoids the select-then-update
+    // race where concurrent calls both pass the check and overrun the budget.
+    const updated = await this.db
+      .update(s.sessions)
+      .set({ aiCalls: sql`${s.sessions.aiCalls} + 1` })
+      .where(and(eq(s.sessions.id, sessionId), or(ne(s.sessions.type, "demo"), lt(s.sessions.aiCalls, DEMO_AI_CALL_LIMIT))))
+      .returning({ id: s.sessions.id });
+    if (updated.length) return true;
+    // No row updated: either an unknown session (allow, as before) or a demo
+    // session that has hit its budget (deny).
+    const [row] = await this.db.select({ id: s.sessions.id }).from(s.sessions).where(eq(s.sessions.id, sessionId)).limit(1);
+    return !row;
   }
 
   async completeDemoStep(sessionId: string, step: DemoStep): Promise<boolean> {
@@ -200,10 +208,10 @@ export class PgRepository implements Repository {
     // mid-provision failure never leaves an orphaned user or a half-workspace.
     await this.db.transaction(async (tx) => {
       await tx.insert(s.users).values({ id: user.id, email: user.email, name: user.name, passwordHash: user.passwordHash });
-      await this.seedWorkspaceRows(tx, workspaceId, input.workspaceName ?? `${input.name}'s workspace`);
+      // Real signup → empty workspace (no demo data, no seed KB corpus).
+      await this.seedWorkspaceRows(tx, workspaceId, input.workspaceName ?? `${input.name}'s workspace`, true);
       await tx.insert(s.memberships).values({ userId: user.id, workspaceId, role: "Admin", status: "Active" });
     });
-    await this.ingestCorpusBestEffort(workspaceId);
     return { user, workspaceId };
   }
 

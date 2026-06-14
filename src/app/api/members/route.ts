@@ -1,5 +1,5 @@
 import { inviteMemberSchema } from "@/lib/schemas";
-import { actorName, ApiError, handleApi, parseBody, requireSession } from "@/server/api";
+import { actorName, ApiError, handleApi, parseBody, requireSession, requireRole } from "@/server/api";
 import { repo } from "@/server/repository";
 import { sendEmailSafe, inviteEmail } from "@/server/email";
 import { planSeatLimit } from "@/server/billing/plans";
@@ -7,6 +7,7 @@ import { planSeatLimit } from "@/server/billing/plans";
 export async function POST(req: Request) {
   return handleApi(async () => {
     const session = await requireSession();
+    await requireRole(session, ["Admin"]);
     const body = await parseBody(req, inviteMemberSchema);
     const r = repo();
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { ZodSchema } from "zod";
 import { currentSession } from "@/server/session";
 import { NotFoundError, repo, type SessionInfo } from "@/server/repository";
+import type { MemberRole } from "@/lib/schemas";
 import { logger } from "@/server/logger";
 import { clientKey, rateLimit, type RateLimit } from "@/server/rate-limit";
 import { secureToken } from "@/lib/utils";
@@ -21,6 +22,19 @@ export async function requireSession(): Promise<SessionInfo> {
   const session = await currentSession();
   if (!session) throw new ApiError(401, "No active session — sign in or open the demo.");
   return session;
+}
+
+/**
+ * Authorize a real user's role. Demo/anonymous sessions (no userId) are
+ * unrestricted within their throwaway sandbox workspace; real users must hold
+ * one of the allowed roles or get a 403.
+ */
+export async function requireRole(session: SessionInfo, allowed: MemberRole[]): Promise<void> {
+  if (!session.userId) return;
+  const role = await repo().membershipRole(session.userId, session.workspaceId);
+  if (!role || !allowed.includes(role)) {
+    throw new ApiError(403, "You don't have permission to do that.");
+  }
 }
 
 /**

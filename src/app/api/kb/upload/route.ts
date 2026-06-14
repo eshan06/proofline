@@ -28,6 +28,8 @@ export async function POST(req: Request) {
       const form = await req.formData();
       const file = form.get("file");
       if (!(file instanceof File)) throw new ApiError(400, "No file provided.");
+      const MAX_BYTES = 10 * 1024 * 1024;
+      if (file.size > MAX_BYTES) throw new ApiError(413, "File too large — the limit is 10 MB.");
       const name = (file.name || "Untitled.txt").slice(0, 160);
       const text = await extractText(file, name);
       if (!text.trim()) throw new ApiError(400, "That file appears to be empty.");

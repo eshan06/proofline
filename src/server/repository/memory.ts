@@ -186,7 +186,8 @@ export class MemoryRepository implements Repository {
     const user: UserRecord = { id: `u_${uid("u")}`, email: input.email.toLowerCase(), name: input.name, passwordHash: input.passwordHash, emailVerified: false };
     this.users.set(user.email, user);
     const workspaceId = `ws_${uid("w")}`;
-    this.workspaces.set(workspaceId, seedWorkspaceData(input.workspaceName ?? `${input.name}'s workspace`));
+    // Real signup → empty workspace (no demo fixtures).
+    this.workspaces.set(workspaceId, seedWorkspaceData(input.workspaceName ?? `${input.name}'s workspace`, { empty: true }));
     this.memberships.push({ userId: user.id, workspaceId, role: "Admin" });
     return { user, workspaceId };
   }

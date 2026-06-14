@@ -356,19 +356,19 @@ export type TicketPatch = z.infer<typeof ticketPatchSchema>;
 
 export const postMessageSchema = z.object({
   kind: z.enum(["reply", "note"]),
-  text: z.string().min(1),
+  text: z.string().min(1).max(10000),
   viaAI: z.boolean().optional(),
 });
 
 export const draftActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("regenerate") }),
   z.object({ action: z.literal("tone"), tone: toneSchema }),
-  z.object({ action: z.literal("edit"), text: z.string() }),
+  z.object({ action: z.literal("edit"), text: z.string().max(20000) }),
 ]);
 export type DraftAction = z.infer<typeof draftActionSchema>;
 
 export const playgroundRequestSchema = z.object({
-  question: z.string().min(1),
+  question: z.string().min(1).max(2000),
 });
 
 export const playgroundResultSchema = z.object({
