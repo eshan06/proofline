@@ -19,9 +19,14 @@ import type {
 import { uid, secureToken } from "@/lib/utils";
 import { seedWorkspaceData, type WorkspaceData } from "./seed-data";
 import { buildWebTicket, newTicketRawId, ticketToTranscript, type WidgetTranscriptMessage } from "./web-ticket";
+import { buildEmailTicket } from "./email-ticket";
 import { planSeatLimit } from "@/server/billing/plans";
+import type { InboundEmail } from "@/server/email/gmail";
 import {
   NotFoundError,
+  type EmailThreadRef,
+  type GmailAccount,
+  type InboundEmailResult,
   type Repository,
   type SessionInfo,
   type SubscriptionState,
@@ -49,6 +54,15 @@ interface WidgetConvo {
   visitorEmail: string | null;
 }
 
+interface EmailThreadRec {
+  workspaceId: string;
+  gmailThreadId: string;
+  ticketId: string;
+  customerEmail: string;
+  lastInboundMessageId: string | null;
+  seen: Set<string>;
+}
+
 export class MemoryRepository implements Repository {
   private sessions: Map<string, MemSession>;
   private workspaces: Map<string, WorkspaceData>;
@@ -56,6 +70,9 @@ export class MemoryRepository implements Repository {
   private memberships: { userId: string; workspaceId: string; role: MemberRole }[];
   private widgetConvos: Map<string, WidgetConvo>;
   private authTokens: Map<string, { kind: "reset" | "verify"; userId: string; expiresAt: number }>;
+  private gmailAccounts: Map<string, GmailAccount>;
+  /** Keyed by `${workspaceId}:${gmailThreadId}`. */
+  private emailThreads: Map<string, EmailThreadRec>;
 
   constructor() {
     const g = globalThis as unknown as {
@@ -66,17 +83,24 @@ export class MemoryRepository implements Repository {
         memberships: { userId: string; workspaceId: string; role: MemberRole }[];
         widgetConvos: Map<string, WidgetConvo>;
         authTokens: Map<string, { kind: "reset" | "verify"; userId: string; expiresAt: number }>;
+        gmailAccounts: Map<string, GmailAccount>;
+        emailThreads: Map<string, EmailThreadRec>;
       };
     };
     if (!g.__plMem) {
-      g.__plMem = { sessions: new Map(), workspaces: new Map(), users: new Map(), memberships: [], widgetConvos: new Map(), authTokens: new Map() };
+      g.__plMem = { sessions: new Map(), workspaces: new Map(), users: new Map(), memberships: [], widgetConvos: new Map(), authTokens: new Map(), gmailAccounts: new Map(), emailThreads: new Map() };
     }
+    // Backfill maps added after a long-running process first created __plMem.
+    g.__plMem.gmailAccounts ??= new Map();
+    g.__plMem.emailThreads ??= new Map();
     this.sessions = g.__plMem.sessions;
     this.workspaces = g.__plMem.workspaces;
     this.users = g.__plMem.users;
     this.memberships = g.__plMem.memberships;
     this.widgetConvos = g.__plMem.widgetConvos;
     this.authTokens = g.__plMem.authTokens;
+    this.gmailAccounts = g.__plMem.gmailAccounts;
+    this.emailThreads = g.__plMem.emailThreads;
   }
 
   private ws(workspaceId: string): WorkspaceData {
@@ -246,9 +270,12 @@ export class MemoryRepository implements Repository {
     for (let i = this.memberships.length - 1; i >= 0; i--) {
       if (this.memberships[i]!.workspaceId === workspaceId) this.memberships.splice(i, 1);
     }
-    // Mirror FK cascade: drop sessions + widget conversations for this workspace.
+    // Mirror FK cascade: drop sessions, widget conversations, and the gmail
+    // account + email threads for this workspace.
     for (const [id, s] of this.sessions) if (s.workspaceId === workspaceId) this.sessions.delete(id);
     for (const [t, c] of this.widgetConvos) if (c.workspaceId === workspaceId) this.widgetConvos.delete(t);
+    this.gmailAccounts.delete(workspaceId);
+    for (const [k, rec] of this.emailThreads) if (rec.workspaceId === workspaceId) this.emailThreads.delete(k);
   }
 
   async deleteUserIfOrphaned(userId: string): Promise<void> {
@@ -515,5 +542,67 @@ export class MemoryRepository implements Repository {
     const t = this.ws(workspaceId).tickets.find((x) => x.id === conv.ticketId);
     if (!t) return null;
     return ticketToTranscript(t.messages);
+  }
+
+  /* gmail email channel -------------------------------------------------- */
+
+  async resolveGmailWorkspace(address: string): Promise<string | null> {
+    const a = address.trim().toLowerCase();
+    for (const [wsId, acct] of this.gmailAccounts) if (acct.address === a) return wsId;
+    return null;
+  }
+
+  async getGmailAccount(workspaceId: string): Promise<GmailAccount | null> {
+    return this.gmailAccounts.get(workspaceId) ?? null;
+  }
+
+  async setGmailAccount(workspaceId: string, account: GmailAccount): Promise<void> {
+    this.gmailAccounts.set(workspaceId, { refreshToken: account.refreshToken, address: account.address.trim().toLowerCase() });
+  }
+
+  async clearGmailAccount(workspaceId: string): Promise<void> {
+    this.gmailAccounts.delete(workspaceId);
+  }
+
+  async ingestInboundEmail(workspaceId: string, email: InboundEmail): Promise<InboundEmailResult> {
+    const key = `${workspaceId}:${email.threadId}`;
+    const existing = this.emailThreads.get(key);
+    if (existing) {
+      if (email.messageId && existing.seen.has(email.messageId)) {
+        return { ticketId: existing.ticketId, created: false, duplicate: true };
+      }
+      const t = this.ws(workspaceId).tickets.find((x) => x.id === existing.ticketId);
+      if (t) {
+        this.append(t, { kind: "customer", author: email.fromName || t.customer.name, text: email.body });
+        t.status = "open";
+        t.stage = "new";
+        t.unread = true;
+      }
+      if (email.messageId) {
+        existing.seen.add(email.messageId);
+        existing.lastInboundMessageId = email.messageId;
+      }
+      return { ticketId: existing.ticketId, created: false, duplicate: false };
+    }
+    const ticket = buildEmailTicket(newTicketRawId(), email);
+    this.ws(workspaceId).tickets.unshift(ticket);
+    this.emailThreads.set(key, {
+      workspaceId,
+      gmailThreadId: email.threadId,
+      ticketId: ticket.id,
+      customerEmail: email.from,
+      lastInboundMessageId: email.messageId || null,
+      seen: new Set(email.messageId ? [email.messageId] : []),
+    });
+    return { ticketId: ticket.id, created: true, duplicate: false };
+  }
+
+  async getEmailThread(workspaceId: string, ticketId: string): Promise<EmailThreadRef | null> {
+    for (const rec of this.emailThreads.values()) {
+      if (rec.workspaceId === workspaceId && rec.ticketId === ticketId) {
+        return { gmailThreadId: rec.gmailThreadId, customerEmail: rec.customerEmail, lastInboundMessageId: rec.lastInboundMessageId };
+      }
+    }
+    return null;
   }
 }

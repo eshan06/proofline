@@ -22,8 +22,19 @@ import type {
 import { uid, secureToken } from "@/lib/utils";
 import { seedWorkspaceData } from "./seed-data";
 import { buildWebTicket, newTicketRawId, ticketToTranscript, type WidgetTranscriptMessage } from "./web-ticket";
+import { buildEmailTicket } from "./email-ticket";
 import { planSeatLimit } from "@/server/billing/plans";
-import { NotFoundError, type Repository, type SessionInfo, type SubscriptionState, type UserRecord } from "./types";
+import type { InboundEmail } from "@/server/email/gmail";
+import {
+  NotFoundError,
+  type EmailThreadRef,
+  type GmailAccount,
+  type InboundEmailResult,
+  type Repository,
+  type SessionInfo,
+  type SubscriptionState,
+  type UserRecord,
+} from "./types";
 
 const DEMO_TTL_MS = 30 * 60 * 1000;
 const REGULAR_TTL_MS = 12 * 60 * 60 * 1000;
@@ -664,6 +675,124 @@ export class PgRepository implements Repository {
       .limit(1);
     if (!row) return null;
     return ticketToTranscript(rowToTicket(row).messages);
+  }
+
+  /* gmail email channel -------------------------------------------------- */
+
+  async resolveGmailWorkspace(address: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ id: s.workspaces.id })
+      .from(s.workspaces)
+      .where(eq(s.workspaces.gmailAddress, address.trim().toLowerCase()))
+      .limit(1);
+    return row?.id ?? null;
+  }
+
+  async getGmailAccount(workspaceId: string): Promise<GmailAccount | null> {
+    const [row] = await this.db
+      .select({ address: s.workspaces.gmailAddress, refreshToken: s.workspaces.gmailRefreshToken })
+      .from(s.workspaces)
+      .where(eq(s.workspaces.id, workspaceId))
+      .limit(1);
+    if (!row?.address || !row.refreshToken) return null;
+    return { address: row.address, refreshToken: row.refreshToken };
+  }
+
+  async setGmailAccount(workspaceId: string, account: GmailAccount): Promise<void> {
+    await this.db
+      .update(s.workspaces)
+      .set({ gmailAddress: account.address.trim().toLowerCase(), gmailRefreshToken: account.refreshToken })
+      .where(eq(s.workspaces.id, workspaceId));
+  }
+
+  async clearGmailAccount(workspaceId: string): Promise<void> {
+    await this.db
+      .update(s.workspaces)
+      .set({ gmailAddress: null, gmailRefreshToken: null })
+      .where(eq(s.workspaces.id, workspaceId));
+  }
+
+  async ingestInboundEmail(workspaceId: string, email: InboundEmail): Promise<InboundEmailResult> {
+    const [thread] = await this.db
+      .select()
+      .from(s.emailThreads)
+      .where(and(eq(s.emailThreads.workspaceId, workspaceId), eq(s.emailThreads.gmailThreadId, email.threadId)))
+      .limit(1);
+
+    if (thread) {
+      const publicId = stripPrefix(thread.ticketId, workspaceId);
+      if (email.messageId && thread.seenMessageIds.includes(email.messageId)) {
+        return { ticketId: publicId, created: false, duplicate: true };
+      }
+      const [row] = await this.db
+        .select()
+        .from(s.tickets)
+        .where(and(eq(s.tickets.workspaceId, workspaceId), eq(s.tickets.id, thread.ticketId)))
+        .limit(1);
+      if (row) {
+        const t = rowToTicket(row);
+        t.messages.push({ id: uid("m"), kind: "customer", author: email.fromName || t.customer.name, time: "just now", text: email.body });
+        t.status = "open";
+        t.stage = "new";
+        t.unread = true;
+        await this.saveTicket(workspaceId, t);
+      }
+      if (email.messageId) {
+        await this.db
+          .update(s.emailThreads)
+          .set({
+            lastInboundMessageId: email.messageId,
+            seenMessageIds: [...thread.seenMessageIds, email.messageId],
+          })
+          .where(and(eq(s.emailThreads.workspaceId, workspaceId), eq(s.emailThreads.gmailThreadId, email.threadId)));
+      }
+      return { ticketId: publicId, created: false, duplicate: false };
+    }
+
+    const rawId = newTicketRawId();
+    const ticket = buildEmailTicket(rawId, email);
+    const fullId = `${workspaceId}_${rawId}`;
+    await this.db.insert(s.tickets).values({
+      id: fullId,
+      workspaceId,
+      customer: ticket.customer,
+      channel: ticket.channel,
+      subject: ticket.subject,
+      preview: ticket.preview,
+      priority: ticket.priority,
+      tags: ticket.tags,
+      status: ticket.status,
+      stage: ticket.stage,
+      assignee: ticket.assignee,
+      slaMins: ticket.slaMins,
+      slaTotal: ticket.slaTotal,
+      unread: ticket.unread,
+      time: ticket.time,
+      conf: ticket.conf,
+      archived: ticket.archived,
+      messages: ticket.messages,
+      draft: ticket.draft,
+      sortOrder: -1,
+    });
+    await this.db.insert(s.emailThreads).values({
+      workspaceId,
+      gmailThreadId: email.threadId,
+      ticketId: fullId,
+      customerEmail: email.from,
+      lastInboundMessageId: email.messageId || null,
+      seenMessageIds: email.messageId ? [email.messageId] : [],
+    });
+    return { ticketId: rawId, created: true, duplicate: false };
+  }
+
+  async getEmailThread(workspaceId: string, ticketId: string): Promise<EmailThreadRef | null> {
+    const [row] = await this.db
+      .select()
+      .from(s.emailThreads)
+      .where(and(eq(s.emailThreads.workspaceId, workspaceId), eq(s.emailThreads.ticketId, `${workspaceId}_${ticketId}`)))
+      .limit(1);
+    if (!row) return null;
+    return { gmailThreadId: row.gmailThreadId, customerEmail: row.customerEmail, lastInboundMessageId: row.lastInboundMessageId };
   }
 }
 

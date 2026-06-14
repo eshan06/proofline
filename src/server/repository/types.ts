@@ -54,6 +54,28 @@ export class NotFoundError extends Error {
 
 export type { WidgetTranscriptMessage } from "./web-ticket";
 import type { WidgetTranscriptMessage } from "./web-ticket";
+import type { InboundEmail } from "@/server/email/gmail";
+
+/** Persisted Gmail OAuth account for a workspace's support inbox. */
+export interface GmailAccount {
+  refreshToken: string;
+  address: string;
+}
+
+/** Metadata for an email-channel ticket, used to thread an outbound reply. */
+export interface EmailThreadRef {
+  gmailThreadId: string;
+  customerEmail: string;
+  lastInboundMessageId: string | null;
+}
+
+export interface InboundEmailResult {
+  ticketId: string;
+  /** True when this email opened a new ticket (vs. appended to an existing thread). */
+  created: boolean;
+  /** True when the message was already ingested (deduped, no-op). */
+  duplicate: boolean;
+}
 
 /**
  * The data boundary the whole app depends on. Two implementations exist —
@@ -163,4 +185,18 @@ export interface Repository {
   appendWidgetMessage(workspaceId: string, token: string, text: string): Promise<boolean>;
   /** The visitor-facing transcript (customer + agent turns), or null if the token is unknown. */
   getWidgetTranscript(workspaceId: string, token: string): Promise<WidgetTranscriptMessage[] | null>;
+
+  /* gmail email channel (dormant until an admin connects Google OAuth) */
+  /** Which workspace owns inbound mail to this address (the connected support inbox), or null. */
+  resolveGmailWorkspace(address: string): Promise<string | null>;
+  /** The stored Gmail account for a workspace, or null if not connected. */
+  getGmailAccount(workspaceId: string): Promise<GmailAccount | null>;
+  /** Persist the Gmail OAuth account (refresh token + connected address). */
+  setGmailAccount(workspaceId: string, account: GmailAccount): Promise<void>;
+  /** Forget the Gmail account (on disconnect). */
+  clearGmailAccount(workspaceId: string): Promise<void>;
+  /** Ingest an inbound email: open a ticket for a new Gmail thread, or append to the existing one (deduped by messageId). */
+  ingestInboundEmail(workspaceId: string, email: InboundEmail): Promise<InboundEmailResult>;
+  /** Thread metadata for an email ticket (for In-Reply-To on agent replies), or null if not an email thread. */
+  getEmailThread(workspaceId: string, ticketId: string): Promise<EmailThreadRef | null>;
 }

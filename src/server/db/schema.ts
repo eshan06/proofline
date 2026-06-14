@@ -44,6 +44,10 @@ export const workspaces = pgTable("workspaces", {
   widgetSiteKey: text("widget_site_key").unique(),
   widgetEnabled: boolean("widget_enabled").notNull().default(true),
   widgetAllowedOrigins: jsonb("widget_allowed_origins").$type<string[]>().notNull().default([]),
+  // Gmail channel: the connected support mailbox + its OAuth refresh token.
+  // Dormant until an admin completes the Google OAuth connect flow.
+  gmailAddress: text("gmail_address"),
+  gmailRefreshToken: text("gmail_refresh_token"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -113,6 +117,29 @@ export const widgetConversations = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("widget_convos_ws_idx").on(t.workspaceId)],
+);
+
+/**
+ * Gmail email-channel threads. Maps a Gmail thread id to the ticket it feeds, so
+ * inbound replies append to the same conversation. `seenMessageIds` dedupes
+ * polled messages; `lastInboundMessageId` is used as the In-Reply-To when an
+ * agent replies, so the outbound mail threads correctly in the customer's client.
+ */
+export const emailThreads = pgTable(
+  "email_threads",
+  {
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    gmailThreadId: text("gmail_thread_id").notNull(),
+    ticketId: text("ticket_id").notNull(),
+    customerEmail: text("customer_email").notNull(),
+    lastInboundMessageId: text("last_inbound_message_id"),
+    seenMessageIds: jsonb("seen_message_ids").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.gmailThreadId] }),
+    index("email_threads_ticket_idx").on(t.workspaceId, t.ticketId),
+  ],
 );
 
 /* ---------------------------------------------------------------- support data */
