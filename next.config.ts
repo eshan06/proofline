@@ -37,6 +37,13 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // Lean container image: only the server + traced deps are copied (see Dockerfile).
   output: "standalone",
+  // Next 15 defaults the client router cache for dynamic segments to 0s, so every
+  // tab navigation re-fetched the force-dynamic app-shell layout (which re-ran the
+  // whole workspace query). Cache visited segments briefly so switching tabs reuses
+  // the layout instead of re-rendering it; mutations still invalidate explicitly.
+  experimental: {
+    staleTimes: { dynamic: 30, static: 180 },
+  },
   // The `postgres` driver is Node-only; keep it external so it's never pulled
   // into an edge bundle (e.g. when instrumentation.ts is traced for the edge
   // runtime) — bundling its source there fails to parse.
