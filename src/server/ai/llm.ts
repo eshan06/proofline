@@ -97,7 +97,7 @@ export function llm(): LLMProvider {
     case "openai": {
       const key = process.env.OPENAI_API_KEY;
       if (!key) {
-        console.warn("[llm] LLM_PROVIDER=openai but OPENAI_API_KEY is missing; using TemplateLLM.");
+        logger.warn("llm.openai_key_missing", { fallback: "TemplateLLM" });
         cached = new TemplateLLM();
         return cached;
       }
@@ -107,7 +107,7 @@ export function llm(): LLMProvider {
     case "anthropic":
       // TODO(anthropic): construct the Anthropic-backed drafter (same contract:
       // answer only from context, abstain when insufficient).
-      console.warn(`[llm] LLM_PROVIDER="anthropic" not wired yet; using TemplateLLM.`);
+      logger.warn("llm.anthropic_not_wired", { fallback: "TemplateLLM" });
       cached = new TemplateLLM();
       return cached;
     default:

@@ -98,7 +98,10 @@ function selectStore(): RateStore {
   if (process.env.REDIS_URL) {
     // A raw redis:// URL needs a TCP client (ioredis) we deliberately don't
     // bundle; the dep-free path is Upstash's REST API. Use in-process meanwhile.
-    console.warn("[rate-limit] REDIS_URL is set but only the Upstash REST store is wired; using the in-process store. Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN for distributed limits.");
+    // Use dynamic import to avoid a circular dependency (logger → rate-limit → logger).
+    import("@/server/logger").then(({ logger }) =>
+      logger.warn("rate_limit.redis_url_unsupported", { hint: "set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN for distributed limits" })
+    ).catch(() => {});
   }
   return new MemoryRateStore();
 }

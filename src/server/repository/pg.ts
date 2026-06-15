@@ -20,6 +20,7 @@ import type {
   Workspace,
 } from "@/lib/schemas";
 import { uid, secureToken } from "@/lib/utils";
+import { logger } from "@/server/logger";
 import { seedWorkspaceData } from "./seed-data";
 import { buildWebTicket, newTicketRawId, ticketToTranscript, type WidgetTranscriptMessage } from "./web-ticket";
 import { buildEmailTicket } from "./email-ticket";
@@ -141,7 +142,7 @@ export class PgRepository implements Repository {
       const { ingestSeedCorpus } = await import("@/server/ai/rag");
       await ingestSeedCorpus(workspaceId);
     } catch (err) {
-      console.error("[seed] corpus ingestion failed:", err);
+      logger.reportError("seed.corpus_ingestion_failed", err, { workspaceId });
     }
   }
 

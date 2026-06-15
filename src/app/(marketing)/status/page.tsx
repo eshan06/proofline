@@ -46,7 +46,7 @@ export default function StatusPage() {
         <h2 className="text-[14px] font-semibold text-ink-1">How to check independently</h2>
         <ul className="mt-2 space-y-1.5 text-[13px] text-ink-2">
           <li>• Hit the health endpoint directly: <code className="rounded bg-white/5 px-1 py-0.5 text-[12px] text-ink-1">GET https://app.proofline.com/api/health</code> — a <code className="rounded bg-white/5 px-1 py-0.5 text-[12px] text-ink-1">200 OK</code> means the API is up.</li>
-          <li>• Check <a href="https://downdetector.com" className="underline underline-offset-2 hover:text-ink-1">Downdetector</a> or your own uptime monitor against the API URL above.</li>
+          <li>• Check <a href="https://downdetector.com" rel="noopener noreferrer" target="_blank" className="underline underline-offset-2 hover:text-ink-1">Downdetector</a> or your own uptime monitor against the API URL above.</li>
           <li>• Review your account&apos;s recent activity log inside the app for any ingestion or delivery errors.</li>
         </ul>
       </div>

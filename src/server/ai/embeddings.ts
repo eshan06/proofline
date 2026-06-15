@@ -1,4 +1,5 @@
 import { EMBEDDING_DIM } from "@/server/db/schema";
+import { logger } from "@/server/logger";
 
 /**
  * Embedding provider. The UI/RAG layer depends only on this interface; the
@@ -94,7 +95,7 @@ export function embedder(): EmbeddingProvider {
     case "openai": {
       const key = process.env.OPENAI_API_KEY;
       if (!key) {
-        console.warn("[embeddings] EMBEDDINGS_PROVIDER=openai but OPENAI_API_KEY missing; using LocalEmbedder.");
+        logger.warn("embeddings.openai_key_missing", { fallback: "LocalEmbedder" });
         cached = new LocalEmbedder();
         return cached;
       }
@@ -103,7 +104,7 @@ export function embedder(): EmbeddingProvider {
     }
     case "voyage":
       // TODO(voyage): same one-fetch shape against the Voyage embeddings API.
-      console.warn(`[embeddings] EMBEDDINGS_PROVIDER="voyage" not wired yet; using LocalEmbedder.`);
+      logger.warn("embeddings.voyage_not_wired", { fallback: "LocalEmbedder" });
       cached = new LocalEmbedder();
       return cached;
     default:
