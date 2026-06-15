@@ -19,7 +19,9 @@ function SignInInner() {
   const resetSuccess = params.get("reset") === "1";
   const verifyFailed = params.get("verify") === "failed";
 
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup">(() =>
+    params.get("mode") === "signup" ? "signup" : "login"
+  );
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

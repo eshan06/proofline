@@ -119,5 +119,8 @@ export const api = {
   patchWidgetConfig: (patch: { allowedOrigins?: string[]; enabled?: boolean }) =>
     request("/api/workspace/widget", { method: "PATCH", body: JSON.stringify(patch) }),
 
+  addCustomerNote: (id: string, text: string) =>
+    request(`/api/customers/${id}/notes`, { method: "POST", body: JSON.stringify({ text }) }),
+
   resendVerification: () => request("/api/auth/resend-verify", { method: "POST" }),
 };

@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { CustomerAvatar } from "@/components/ui/avatar";
 import { ChannelIcon } from "@/components/shared/channel-icon";
-import { useWorkspace } from "@/hooks/use-workspace";
+import { useWorkspace, WORKSPACE_KEY } from "@/hooks/use-workspace";
 import { sentimentColor } from "@/data/workspace";
 import { stageMap } from "@/lib/maps";
-import { toast } from "@/stores/toasts";
+import { api } from "@/lib/api-client";
 import type { Customer } from "@/lib/schemas";
 
 export function CustomersView({ customerId }: { customerId: string | undefined }) {
@@ -83,6 +84,12 @@ function Profile({
   tickets: { id: string; subject: string; customer: { name: string }; stage: keyof typeof stageMap; channel: "web" | "email" | "slack"; archived: boolean }[];
   onOpen: (id: string) => void;
 }) {
+  const queryClient = useQueryClient();
+  const [composing, setComposing] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   const convos = tickets.filter((t) => t.customer.name === customer.name && !t.archived);
   const meta: [string, string][] = [
     ["Plan", customer.plan],
@@ -92,6 +99,26 @@ function Profile({
     ["Seats", customer.seats],
     ["Last active", customer.lastActive],
   ];
+
+  function openComposer() {
+    setComposing(true);
+    setNoteText("");
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }
+
+  async function submitNote() {
+    const text = noteText.trim();
+    if (!text || submitting) return;
+    setSubmitting(true);
+    try {
+      await api.addCustomerNote(customer.id, text);
+      await queryClient.invalidateQueries({ queryKey: WORKSPACE_KEY });
+      setComposing(false);
+      setNoteText("");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-[760px] px-8 pb-10 pt-[26px]">
@@ -161,15 +188,53 @@ function Profile({
       <div className="mt-3.5 flex flex-col gap-[11px] rounded-[11px] border border-white/7 bg-card px-4 py-3.5">
         <div className="flex items-center">
           <span className="text-[13px] font-semibold text-ink">Notes</span>
-          <button
-            type="button"
-            onClick={() => toast("Customer notes editor")}
-            className="ml-auto border-0 bg-transparent text-[11.5px] text-accent"
-          >
-            + Add note
-          </button>
+          {!composing && (
+            <button
+              type="button"
+              onClick={openComposer}
+              className="ml-auto border-0 bg-transparent text-[11.5px] text-accent"
+            >
+              + Add note
+            </button>
+          )}
         </div>
-        {customer.notes.length === 0 ? (
+
+        {composing && (
+          <div className="flex flex-col gap-2">
+            <textarea
+              ref={textareaRef}
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submitNote();
+                if (e.key === "Escape") { setComposing(false); setNoteText(""); }
+              }}
+              rows={3}
+              placeholder="Add a note…"
+              className="w-full resize-none rounded-[7px] border border-white/10 bg-white/4 px-3 py-2 text-[12.5px] leading-[1.55] text-ink placeholder:text-muted focus:border-accent/40 focus:outline-none"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void submitNote()}
+                disabled={!noteText.trim() || submitting}
+                className="rounded-[6px] bg-accent px-3 py-1 text-[11.5px] font-medium text-white disabled:opacity-40"
+              >
+                {submitting ? "Saving…" : "Save note"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setComposing(false); setNoteText(""); }}
+                className="border-0 bg-transparent text-[11.5px] text-muted hover:text-ink"
+              >
+                Cancel
+              </button>
+              <span className="ml-auto text-[10.5px] text-faint">⌘↵ to save</span>
+            </div>
+          </div>
+        )}
+
+        {customer.notes.length === 0 && !composing ? (
           <div className="text-[12px] text-muted">No notes yet.</div>
         ) : (
           customer.notes.map((n, i) => (

@@ -462,6 +462,19 @@ export class MemoryRepository implements Repository {
     if (t) Object.assign(t, fields);
   }
 
+  /* customers ------------------------------------------------------------ */
+
+  async appendCustomerNote(
+    workspaceId: string,
+    customerId: string,
+    note: { author: string; text: string },
+  ): Promise<void> {
+    const d = this.ws(workspaceId);
+    const customer = d.customers.find((c) => c.id === customerId);
+    if (!customer) throw new NotFoundError(`Unknown customer ${customerId}`);
+    customer.notes.push({ author: note.author, time: "just now", text: note.text });
+  }
+
   /* knowledge base ------------------------------------------------------- */
 
   async addKbDoc(workspaceId: string, doc: Omit<KbDoc, "id">): Promise<KbDoc> {

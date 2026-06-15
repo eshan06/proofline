@@ -240,6 +240,13 @@ export interface Repository {
   /** Thread metadata for an email ticket (for In-Reply-To on agent replies), or null if not an email thread. */
   getEmailThread(workspaceId: string, ticketId: string): Promise<EmailThreadRef | null>;
 
+  /* customers */
+  appendCustomerNote(
+    workspaceId: string,
+    customerId: string,
+    note: { author: string; text: string },
+  ): Promise<void>;
+
   /* slack email channel (dormant until an admin installs the Slack app) */
   /** Which workspace owns the given Slack team (workspace install), or null. */
   resolveSlackWorkspace(teamId: string): Promise<string | null>;

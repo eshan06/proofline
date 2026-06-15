@@ -573,6 +573,30 @@ export class PgRepository implements Repository {
     });
   }
 
+  /* customers ------------------------------------------------------------ */
+
+  async appendCustomerNote(
+    workspaceId: string,
+    customerId: string,
+    note: { author: string; text: string },
+  ): Promise<void> {
+    const fullId = `${workspaceId}_${customerId}`;
+    await this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(s.customers)
+        .where(and(eq(s.customers.workspaceId, workspaceId), eq(s.customers.id, fullId)))
+        .for("update")
+        .limit(1);
+      if (!row) throw new NotFoundError(`Unknown customer ${customerId}`);
+      const updated = [...row.notes, { author: note.author, time: "just now", text: note.text }];
+      await tx
+        .update(s.customers)
+        .set({ notes: updated })
+        .where(and(eq(s.customers.workspaceId, workspaceId), eq(s.customers.id, fullId)));
+    });
+  }
+
   /* knowledge base ------------------------------------------------------- */
 
   async addKbDoc(workspaceId: string, doc: Omit<KbDoc, "id">): Promise<KbDoc> {

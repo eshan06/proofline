@@ -55,7 +55,7 @@ function Nav() {
         </div>
         <span className="flex-1" />
         <Link href="/signin" className="text-[13px] text-ink-4 no-underline hover:text-ink">Sign in</Link>
-        <Link href="/signin" className="rounded-[7px] bg-accent px-3.5 py-[7px] text-[13px] font-semibold text-white no-underline hover:bg-accent-hover" style={{ boxShadow: "0 2px 14px rgba(77,124,254,0.35)" }}>Start free</Link>
+        <Link href="/signin?mode=signup" className="rounded-[7px] bg-accent px-3.5 py-[7px] text-[13px] font-semibold text-white no-underline hover:bg-accent-hover" style={{ boxShadow: "0 2px 14px rgba(77,124,254,0.35)" }}>Start free</Link>
       </div>
     </div>
   );
@@ -87,7 +87,7 @@ function Hero() {
             One inbox for chat, email, and Slack. Every reply is drafted from your docs, cited, and approved by a human.
           </p>
           <div className="flex gap-[11px]" style={{ animation: "plUp 0.6s 0.21s ease both" }}>
-            <Link href="/signin" className="rounded-[9px] bg-accent px-[22px] py-[11px] text-[14px] font-semibold text-white no-underline hover:-translate-y-px hover:bg-accent-hover" style={{ boxShadow: "0 6px 22px rgba(77,124,254,0.38)" }}>Start free</Link>
+            <Link href="/signin?mode=signup" className="rounded-[9px] bg-accent px-[22px] py-[11px] text-[14px] font-semibold text-white no-underline hover:-translate-y-px hover:bg-accent-hover" style={{ boxShadow: "0 6px 22px rgba(77,124,254,0.38)" }}>Start free</Link>
             <Link href="/demo" className="flex items-center gap-2 rounded-[9px] border border-white/10 bg-white/4 px-[18px] py-[11px] text-[14px] font-medium text-ink-2 no-underline hover:border-accent/40 hover:bg-white/8">
               <span>Try the demo yourself</span>
               <span className="text-muted">→</span>

@@ -23,7 +23,7 @@ export function MarketingPage({
           </Link>
           <span className="flex-1" />
           <Link href="/signin" className="text-[13px] text-ink-4 no-underline hover:text-ink">Sign in</Link>
-          <Link href="/signin" className="rounded-[7px] bg-accent px-3.5 py-[7px] text-[13px] font-semibold text-white no-underline hover:bg-accent-hover">Start free</Link>
+          <Link href="/signin?mode=signup" className="rounded-[7px] bg-accent px-3.5 py-[7px] text-[13px] font-semibold text-white no-underline hover:bg-accent-hover">Start free</Link>
         </div>
       </div>
 
