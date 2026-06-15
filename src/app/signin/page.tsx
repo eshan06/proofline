@@ -15,6 +15,8 @@ function SignInInner() {
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get("next") || "/home";
+  const resetSuccess = params.get("reset") === "1";
+  const verifyFailed = params.get("verify") === "failed";
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [name, setName] = useState("");
@@ -56,6 +58,17 @@ function SignInInner() {
             {mode === "login" ? "Sign in to your Proofline workspace." : "Start with a fully-loaded workspace to explore."}
           </p>
         </div>
+
+        {resetSuccess ? (
+          <div className="rounded-[8px] border border-success/30 bg-success/10 px-4 py-3 text-[12.5px] text-ink-2">
+            Password changed — sign in with your new password.
+          </div>
+        ) : null}
+        {verifyFailed ? (
+          <div className="rounded-[8px] border border-warning/30 bg-warning/[0.06] px-4 py-3 text-[12.5px] text-warning-soft">
+            That verification link has expired or was already used. Sign in and we&apos;ll send a new one.
+          </div>
+        ) : null}
 
         <form onSubmit={submit} className="flex flex-col gap-3">
           {mode === "signup" ? (

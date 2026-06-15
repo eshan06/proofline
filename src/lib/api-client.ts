@@ -68,6 +68,9 @@ export const api = {
   inviteMember: (body: { email: string; role: "Admin" | "Agent" | "Viewer" }) =>
     request("/api/members", { method: "POST", body: JSON.stringify(body) }),
 
+  patchMemberRole: (userId: string, role: "Admin" | "Agent" | "Viewer") =>
+    request(`/api/members/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) }),
+
   playground: async (question: string): Promise<PlaygroundResult> =>
     playgroundResultSchema.parse(
       await request("/api/playground", { method: "POST", body: JSON.stringify({ question }) }),
@@ -96,6 +99,9 @@ export const api = {
   resetPassword: (body: { token: string; password: string }) =>
     request("/api/auth/reset", { method: "POST", body: JSON.stringify(body) }),
 
+  acceptInvite: (body: { token: string; name?: string; password?: string }) =>
+    request("/api/auth/accept-invite", { method: "POST", body: JSON.stringify(body) }),
+
   deleteAccount: () => request("/api/account/delete", { method: "POST" }),
 
   renameWorkspace: (name: string) =>
@@ -103,4 +109,12 @@ export const api = {
 
   checkout: (plan: "growth" | "scale") =>
     request<{ url: string }>("/api/billing/checkout", { method: "POST", body: JSON.stringify({ plan }) }),
+
+  billingPortal: () =>
+    request<{ url?: string; error?: string; message?: string }>("/api/billing/portal", { method: "POST" }),
+
+  patchWidgetConfig: (patch: { allowedOrigins?: string[]; enabled?: boolean }) =>
+    request("/api/workspace/widget", { method: "PATCH", body: JSON.stringify(patch) }),
+
+  resendVerification: () => request("/api/auth/resend-verify", { method: "POST" }),
 };

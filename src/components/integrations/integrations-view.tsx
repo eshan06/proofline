@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useWorkspace } from "@/hooks/use-workspace";
+import { useQueryClient } from "@tanstack/react-query";
+import { useWorkspace, WORKSPACE_KEY } from "@/hooks/use-workspace";
 import { useToggleIntegration } from "@/hooks/use-integrations";
 import { toast } from "@/stores/toasts";
+import { api } from "@/lib/api-client";
 import type { Integration, IntegrationKey, WidgetConfig } from "@/lib/schemas";
 
 /** OAuth-channel keys that connect via a redirect round-trip (not a boolean flip). */
@@ -152,12 +154,46 @@ function WebchatPanel({ widget, onClose }: { widget: WidgetConfig | undefined; o
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const siteKey = widget?.siteKey ?? "";
   const snippet = `<script src="${origin}/api/widget/embed?key=${siteKey}" async></script>`;
-  const allowed = widget?.allowedOrigins ?? [];
+  const [allowed, setAllowed] = useState<string[]>(widget?.allowedOrigins ?? []);
+  const [newOrigin, setNewOrigin] = useState("");
+  const [savingOrigins, setSavingOrigins] = useState(false);
+  const queryClient = useQueryClient();
+
   const copy = () => {
     navigator.clipboard?.writeText(snippet).then(
       () => toast("Embed snippet copied to clipboard"),
       () => toast("Copy failed — select and copy manually"),
     );
+  };
+
+  const saveOrigins = async (next: string[]) => {
+    setSavingOrigins(true);
+    try {
+      await api.patchWidgetConfig({ allowedOrigins: next });
+      await queryClient.invalidateQueries({ queryKey: WORKSPACE_KEY });
+      toast(next.length ? "Allowed origins updated" : "Restrictions cleared — any origin may embed the widget");
+    } catch {
+      toast("Could not update allowed origins");
+    } finally {
+      setSavingOrigins(false);
+    }
+  };
+
+  const addOrigin = () => {
+    const trimmed = newOrigin.trim().replace(/\/$/, "");
+    if (!trimmed) return;
+    try { new URL(trimmed); } catch { toast("Enter a valid origin, e.g. https://acme.com"); return; }
+    if (allowed.includes(trimmed)) { toast("Already in the list"); return; }
+    const next = [...allowed, trimmed];
+    setAllowed(next);
+    setNewOrigin("");
+    void saveOrigins(next);
+  };
+
+  const removeOrigin = (origin: string) => {
+    const next = allowed.filter((o) => o !== origin);
+    setAllowed(next);
+    void saveOrigins(next);
   };
   return (
     <PanelShell title="Website Chat setup" badge="Live" badgeColor="#3DD68C" badgeBg="rgba(61,214,140,0.1)" onClose={onClose}>
@@ -180,16 +216,29 @@ function WebchatPanel({ widget, onClose }: { widget: WidgetConfig | undefined; o
             </div>
           </div>
           <div className="flex flex-col gap-[7px]">
-            <span className="text-[11px] font-semibold text-ink-4">Allowed domains</span>
+            <span className="text-[11px] font-semibold text-ink-4">Allowed origins</span>
+            <p className="text-[10.5px] text-muted">Leave empty to allow any origin. Add your site(s) to restrict the widget to those origins only.</p>
             <div className="flex flex-wrap gap-1.5">
-              {allowed.length ? (
-                allowed.map((d) => (
-                  <span key={d} className="rounded-full border border-white/8 bg-white/4 px-2.5 py-[3px] font-mono text-[10.5px] text-ink-3">{d}</span>
-                ))
+              {allowed.length === 0 ? (
+                <span className="rounded-full border border-white/8 bg-white/4 px-2.5 py-[3px] font-mono text-[10.5px] text-muted">Any origin allowed</span>
               ) : (
-                <span className="rounded-full border border-white/8 bg-white/4 px-2.5 py-[3px] font-mono text-[10.5px] text-muted">Any origin — add domains to restrict</span>
+                allowed.map((o) => (
+                  <span key={o} className="flex items-center gap-1 rounded-full border border-white/8 bg-white/4 px-2.5 py-[3px] font-mono text-[10.5px] text-ink-3">
+                    {o}
+                    <button type="button" onClick={() => removeOrigin(o)} disabled={savingOrigins} className="ml-0.5 text-muted hover:text-danger" title="Remove">×</button>
+                  </span>
+                ))
               )}
-              <button type="button" onClick={() => toast("Domain allowlist editing — coming soon")} className="rounded-full border border-dashed border-white/15 px-2.5 py-[3px] font-mono text-[10.5px] text-muted hover:border-accent/40 hover:text-accent-soft">+ add</button>
+            </div>
+            <div className="flex gap-1.5">
+              <input
+                value={newOrigin}
+                onChange={(e) => setNewOrigin(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addOrigin(); } }}
+                placeholder="https://acme.com"
+                className="pl-focus min-w-0 flex-1 rounded-[7px] border border-white/9 bg-white/[0.035] px-2.5 py-1.5 font-mono text-[11px] text-ink"
+              />
+              <button type="button" onClick={addOrigin} disabled={savingOrigins || !newOrigin.trim()} className="rounded-[7px] border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-ink-2 hover:border-accent/50 disabled:opacity-40">Add</button>
             </div>
           </div>
         </div>

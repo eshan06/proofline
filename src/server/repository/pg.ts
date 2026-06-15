@@ -271,6 +271,16 @@ export class PgRepository implements Repository {
   async markEmailVerified(userId: string): Promise<void> {
     await this.db.update(s.users).set({ emailVerified: true }).where(eq(s.users.id, userId));
   }
+  async consumeEmailVerificationAtomic(token: string): Promise<string | null> {
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx.select().from(s.emailVerifications).where(eq(s.emailVerifications.token, token)).limit(1);
+      if (!row) return null;
+      await tx.delete(s.emailVerifications).where(eq(s.emailVerifications.token, token));
+      if (row.expiresAt.getTime() < Date.now()) return null;
+      await tx.update(s.users).set({ emailVerified: true }).where(eq(s.users.id, row.userId));
+      return row.userId;
+    });
+  }
 
   async deleteWorkspace(workspaceId: string): Promise<void> {
     // FK cascades remove tickets, customers, kb, automations, integrations,
@@ -376,7 +386,7 @@ export class PgRepository implements Repository {
     const memberRows = mem.map((m) => {
       const u = usersById.get(m.userId);
       const name = u?.name ?? m.invitedEmail?.split("@")[0] ?? "Member";
-      return { name, email: u?.email ?? m.invitedEmail ?? "", role: m.role as MemberRole, init: name.charAt(0).toUpperCase(), status: m.status as "Active" | "Invited" };
+      return { userId: m.userId, name, email: u?.email ?? m.invitedEmail ?? "", role: m.role as MemberRole, init: name.charAt(0).toUpperCase(), status: m.status as "Active" | "Invited" };
     });
     const seedMembers = seedWorkspaceData().members;
 
@@ -432,6 +442,14 @@ export class PgRepository implements Repository {
 
   async renameWorkspace(workspaceId: string, name: string): Promise<void> {
     await this.db.update(s.workspaces).set({ name }).where(eq(s.workspaces.id, workspaceId));
+  }
+  async patchWidgetConfig(workspaceId: string, patch: { allowedOrigins?: string[]; enabled?: boolean }): Promise<void> {
+    await this.db.update(s.workspaces)
+      .set({
+        ...(patch.allowedOrigins !== undefined ? { widgetAllowedOrigins: patch.allowedOrigins } : {}),
+        ...(patch.enabled !== undefined ? { widgetEnabled: patch.enabled } : {}),
+      })
+      .where(eq(s.workspaces.id, workspaceId));
   }
 
   async getKbDocs(workspaceId: string): Promise<KbDoc[]> {
@@ -610,6 +628,68 @@ export class PgRepository implements Repository {
     await this.db.insert(s.users).values({ id: userId, email: email.toLowerCase(), name: local.charAt(0).toUpperCase() + local.slice(1) }).onConflictDoNothing();
     await this.db.insert(s.memberships).values({ userId, workspaceId, role, status: "Invited", invitedEmail: email }).onConflictDoNothing();
     return { name: local.charAt(0).toUpperCase() + local.slice(1), email, role, init: local.charAt(0).toUpperCase(), status: "Invited" };
+  }
+
+  async acceptInvite(input: { workspaceId: string; email: string; role: string; name?: string; passwordHash?: string }): Promise<{ userId: string }> {
+    const normalizedEmail = input.email.toLowerCase();
+
+    // Find the placeholder user created at invite time (matched by email).
+    const [existingUser] = await this.db.select().from(s.users).where(eq(s.users.email, normalizedEmail)).limit(1);
+
+    let userId: string;
+    if (existingUser) {
+      userId = existingUser.id;
+      // Update the account with a real name and/or password if provided.
+      const updates: Record<string, unknown> = {};
+      if (input.name) updates.name = input.name;
+      if (input.passwordHash) updates.passwordHash = input.passwordHash;
+      if (Object.keys(updates).length) {
+        await this.db.update(s.users).set(updates).where(eq(s.users.id, userId));
+      }
+    } else {
+      // No placeholder user — create a full account now.
+      const local = normalizedEmail.split("@")[0] ?? "teammate";
+      userId = `u_${uid("u")}`;
+      await this.db.insert(s.users).values({
+        id: userId,
+        email: normalizedEmail,
+        name: input.name ?? (local.charAt(0).toUpperCase() + local.slice(1)),
+        passwordHash: input.passwordHash ?? null,
+      });
+    }
+
+    // Activate the membership (created by inviteMember) or insert one if missing.
+    const updatedRows = await this.db
+      .update(s.memberships)
+      .set({ status: "Active" })
+      .where(and(eq(s.memberships.workspaceId, input.workspaceId), eq(s.memberships.userId, userId)))
+      .returning({ userId: s.memberships.userId });
+
+    if (!updatedRows.length) {
+      await this.db.insert(s.memberships).values({
+        userId,
+        workspaceId: input.workspaceId,
+        role: input.role as MemberRole,
+        status: "Active",
+        invitedEmail: normalizedEmail,
+      });
+    }
+
+    return { userId };
+  }
+
+  async updateMemberRole(workspaceId: string, userId: string, role: MemberRole): Promise<Member> {
+    const result = await this.db
+      .update(s.memberships)
+      .set({ role })
+      .where(and(eq(s.memberships.workspaceId, workspaceId), eq(s.memberships.userId, userId)))
+      .returning({ userId: s.memberships.userId });
+    if (!result.length) throw new NotFoundError(`No membership for user ${userId} in this workspace`);
+    const [user] = await this.db.select().from(s.users).where(eq(s.users.id, userId)).limit(1);
+    if (!user) throw new NotFoundError(`User ${userId} not found`);
+    const [mem] = await this.db.select().from(s.memberships).where(and(eq(s.memberships.workspaceId, workspaceId), eq(s.memberships.userId, userId))).limit(1);
+    const local = user.name;
+    return { name: local, email: user.email, role, init: local.charAt(0).toUpperCase(), status: (mem?.status ?? "Active") as "Active" | "Invited" };
   }
 
   async patchCopilot(workspaceId: string, patch: Partial<CopilotSettings>): Promise<CopilotSettings> {

@@ -127,6 +127,8 @@ export interface Repository {
   createEmailVerification(userId: string): Promise<string>;
   consumeEmailVerification(token: string): Promise<string | null>;
   markEmailVerified(userId: string): Promise<void>;
+  /** Atomic: consume the token and mark the user verified in one transaction. Returns userId or null. */
+  consumeEmailVerificationAtomic(token: string): Promise<string | null>;
 
   /* account deletion (GDPR / workspace teardown) */
   /** Delete a workspace and all its data (cascade). */
@@ -187,12 +189,29 @@ export interface Repository {
   /* integrations / members / copilot */
   patchIntegration(workspaceId: string, key: IntegrationKey, connected: boolean): Promise<Integration>;
   inviteMember(workspaceId: string, email: string, role: MemberRole): Promise<Member>;
+  updateMemberRole(workspaceId: string, userId: string, role: MemberRole): Promise<Member>;
+  /**
+   * Accept an invite for `email` on `workspaceId`.
+   * - If `passwordHash` is supplied, a new user account is created (or an
+   *   existing placeholder account gains a real password + updated name).
+   * - The membership row for that email is flipped from "Invited" to "Active".
+   * Returns the userId so the caller can start a session.
+   */
+  acceptInvite(input: {
+    workspaceId: string;
+    email: string;
+    role: string;
+    name?: string;
+    passwordHash?: string;
+  }): Promise<{ userId: string }>;
   patchCopilot(workspaceId: string, patch: Partial<CopilotSettings>): Promise<CopilotSettings>;
 
   /* audit log — security-relevant actions are appended here */
   appendAudit(workspaceId: string, event: { user: string; action: string; type: AuditEvent["type"] }): Promise<void>;
 
   /* website chat widget (public intake) */
+  /** Update the widget allowed-origin CORS list (and optionally enabled flag). */
+  patchWidgetConfig(workspaceId: string, patch: { allowedOrigins?: string[]; enabled?: boolean }): Promise<void>;
   /** Resolve a public widget site key to its workspace + CORS allowlist, or null if unknown/disabled. */
   resolveSiteKey(siteKey: string): Promise<{ workspaceId: string; allowedOrigins: string[] } | null>;
   /** Open a new web-chat conversation (creates a ticket); returns the visitor's token + ticket id. */

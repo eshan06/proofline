@@ -9,6 +9,7 @@ import { KeyboardProvider } from "./keyboard-provider";
 import { Toaster } from "./toaster";
 import { DemoBanner } from "./demo-banner";
 import { DemoChecklist } from "./demo-checklist";
+import { VerifyBanner } from "./verify-banner";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { ApiClientError } from "@/lib/api-client";
 import type { Shell } from "@/lib/schemas";
@@ -45,11 +46,7 @@ export function AppShell({ shell, children }: { shell: Shell; children: React.Re
       style={{ minWidth: 1240 }}
     >
       {isDemo ? <DemoBanner demo={demo} /> : null}
-      {needsVerify ? (
-        <div className="flex h-8 shrink-0 items-center justify-center gap-2 bg-warning/12 text-[12px] text-warning">
-          <span>📬 Verify your email — we sent a confirmation link to {currentUser!.email}.</span>
-        </div>
-      ) : null}
+      {needsVerify ? <VerifyBanner email={currentUser!.email} /> : null}
 
       <div className="flex min-h-0 flex-1">
         <Sidebar workspaceName={name} currentUser={currentUser} />

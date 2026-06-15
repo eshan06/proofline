@@ -3,6 +3,7 @@ import { actorName, ApiError, handleApi, parseBody, requireSession, requireRole 
 import { repo } from "@/server/repository";
 import { sendEmailSafe, inviteEmail } from "@/server/email";
 import { planSeatLimit } from "@/server/billing/plans";
+import { createInviteToken } from "@/server/invite-token";
 
 export async function POST(req: Request) {
   return handleApi(async () => {
@@ -25,7 +26,8 @@ export async function POST(req: Request) {
       action: `Invited ${body.email} as ${body.role}`,
       type: "Team",
     });
-    sendEmailSafe(inviteEmail(body.email, ws.name, body.role), "invite");
+    const inviteToken = createInviteToken(session.workspaceId, body.email, body.role);
+    sendEmailSafe(inviteEmail(body.email, ws.name, body.role, inviteToken), "invite");
     return member;
   });
 }

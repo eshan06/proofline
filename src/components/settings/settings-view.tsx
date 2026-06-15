@@ -77,6 +77,49 @@ export function SettingsView({ tab }: { tab: Tab }) {
   );
 }
 
+const ROLE_CYCLE: Record<MemberRole, MemberRole> = { Admin: "Agent", Agent: "Viewer", Viewer: "Admin" };
+
+function RoleButton({ member }: { member: Member }) {
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+
+  const cycleRole = async () => {
+    if (!member.userId) {
+      toast("Role editing is not available for demo members");
+      return;
+    }
+    const next = ROLE_CYCLE[member.role];
+    if (
+      member.role === "Admin" &&
+      !window.confirm(`Demote ${member.name} from Admin to Agent? They will lose billing and member management access.`)
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.patchMemberRole(member.userId, next);
+      await queryClient.invalidateQueries({ queryKey: WORKSPACE_KEY });
+      toast(`${member.name} is now ${next}`);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not update role");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={cycleRole}
+      disabled={busy}
+      className="flex items-center gap-1.5 rounded-full border border-white/9 bg-white/4 px-[11px] py-[3px] text-[11px] text-ink-2 hover:border-accent/50 disabled:opacity-50"
+    >
+      <span>{member.role}</span>
+      {member.userId ? <span className="text-[8px] text-muted">▾</span> : null}
+    </button>
+  );
+}
+
 function TeamTab({ members, onInvite }: { members: Member[]; onInvite: () => void }) {
   return (
     <div className="mt-[18px] flex flex-col gap-3.5" style={{ animation: "plFade 0.2s ease" }}>
@@ -100,9 +143,7 @@ function TeamTab({ members, onInvite }: { members: Member[]; onInvite: () => voi
                 <span className="h-[5px] w-[5px] rounded-full" style={{ background: m.status === "Active" ? "#3DD68C" : "#F5B74E" }} />
                 <span>{m.status}</span>
               </span>
-              <button type="button" onClick={() => toast("Role editor")} className="flex items-center gap-1.5 rounded-full border border-white/9 bg-white/4 px-[11px] py-[3px] text-[11px] text-ink-2 hover:border-accent/50">
-                <span>{m.role}</span><span className="text-[8px] text-muted">▾</span>
-              </button>
+              <RoleButton member={m} />
             </div>
           );
         })}
@@ -210,6 +251,26 @@ function BillingTab({ subscription, usage }: { subscription?: Subscription; usag
   const limit = subscription?.seatLimit ?? 0;
   const status = subscription?.status ?? "active";
   const isScale = plan === "Scale";
+  const isPaid = plan !== "Free";
+  const [portalLoading, setPortalLoading] = useState(false);
+
+  const openPortal = async () => {
+    if (portalLoading) return;
+    setPortalLoading(true);
+    try {
+      const res = await api.billingPortal();
+      if (res.url) {
+        window.location.href = res.url;
+      } else {
+        toast(res.message ?? "No billing account found — complete a checkout first.");
+      }
+    } catch {
+      toast("Could not open billing portal — try again");
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
   return (
     <div className="mt-[18px] flex flex-col gap-3.5" style={{ animation: "plFade 0.2s ease" }}>
       <div className="flex items-center gap-3.5 rounded-[11px] border border-accent/30 px-[18px] py-4" style={{ background: "linear-gradient(170deg, rgba(77,124,254,0.08), rgba(77,124,254,0.015)), #0F141E" }}>
@@ -217,24 +278,36 @@ function BillingTab({ subscription, usage }: { subscription?: Subscription; usag
           <span className="text-[14px] font-semibold text-ink">{plan} plan{status !== "active" ? ` · ${status}` : ""}</span>
           <span className="text-[11.5px] text-ink-4">{used} of {limit} seats used{subscription?.currentPeriodEnd ? ` · renews ${subscription.currentPeriodEnd}` : ""}</span>
         </div>
-        {!isScale ? (
-          <button
-            type="button"
-            onClick={async () => {
-              try {
-                const { url } = await api.checkout("scale");
-                window.location.href = url;
-              } catch {
-                toast("Could not start checkout — try again");
-              }
-            }}
-            className="rounded-[7px] border border-white/10 bg-white/5 px-[13px] py-1.5 text-[11.5px] font-medium text-ink-2 hover:border-accent/50 hover:text-accent-soft"
-          >
-            Upgrade to Scale
-          </button>
-        ) : (
-          <span className="rounded-full bg-success/[0.1] px-[10px] py-1 text-[11px] text-success">Top tier</span>
-        )}
+        <div className="flex items-center gap-2">
+          {isPaid ? (
+            <button
+              type="button"
+              onClick={openPortal}
+              disabled={portalLoading}
+              className="rounded-[7px] border border-white/10 bg-white/5 px-[13px] py-1.5 text-[11.5px] font-medium text-ink-2 hover:border-accent/50 hover:text-accent-soft disabled:opacity-50"
+            >
+              {portalLoading ? "Opening…" : "Manage billing"}
+            </button>
+          ) : null}
+          {!isScale ? (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const { url } = await api.checkout("scale");
+                  window.location.href = url;
+                } catch {
+                  toast("Could not start checkout — try again");
+                }
+              }}
+              className="rounded-[7px] border border-white/10 bg-white/5 px-[13px] py-1.5 text-[11.5px] font-medium text-ink-2 hover:border-accent/50 hover:text-accent-soft"
+            >
+              Upgrade to Scale
+            </button>
+          ) : (
+            <span className="rounded-full bg-success/[0.1] px-[10px] py-1 text-[11px] text-success">Top tier</span>
+          )}
+        </div>
       </div>
       <div className="grid grid-cols-4 gap-3">
         {usage.map((u) => (
@@ -254,10 +327,21 @@ function BillingTab({ subscription, usage }: { subscription?: Subscription; usag
       <div className="overflow-hidden rounded-[11px] border border-white/7 bg-card">
         <div className="flex items-center border-b border-white/6 px-4 py-3">
           <span className="text-[13px] font-semibold text-ink">Invoices</span>
+          {isPaid ? (
+            <button
+              type="button"
+              onClick={openPortal}
+              disabled={portalLoading}
+              className="ml-auto border-0 bg-transparent text-[11.5px] font-medium text-accent hover:text-accent-soft disabled:opacity-50"
+            >
+              {portalLoading ? "Opening…" : "View invoices →"}
+            </button>
+          ) : null}
         </div>
         <div className="px-4 py-5 text-[12px] leading-[1.6] text-muted">
-          Invoices and payment methods are managed in Stripe. Once your first
-          payment is processed they’ll appear in your Stripe billing portal.
+          {isPaid
+            ? "Invoices and payment methods are managed in the Stripe billing portal. Click \"View invoices\" above to open it."
+            : "Invoices and payment methods are managed in Stripe. Once your first payment is processed they’ll appear in your Stripe billing portal."}
         </div>
       </div>
     </div>

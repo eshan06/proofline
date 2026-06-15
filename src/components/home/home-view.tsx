@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, Plus, Sparkles, Zap, AlertTriangle } from "lucide-react";
 import { ChannelIcon } from "@/components/shared/channel-icon";
 import { useWorkspace } from "@/hooks/use-workspace";
@@ -36,6 +36,8 @@ function attentionChip(a: AttentionEntry): string {
 
 export function HomeView() {
   const router = useRouter();
+  const params = useSearchParams();
+  const verified = params.get("verified") === "1";
   const { data: ws } = useWorkspace();
   const firstName = ws?.currentUser?.name.split(/\s+/)[0] ?? "there";
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
@@ -65,6 +67,11 @@ export function HomeView() {
     return (
       <div className="min-h-0 flex-1 overflow-y-auto" style={{ animation: "plFade 0.22s ease" }}>
         <div className="mx-auto max-w-[760px] px-8 pb-10 pt-[56px]">
+          {verified ? (
+            <div className="mb-6 rounded-[10px] border border-success/30 bg-success/[0.06] px-4 py-3 text-[12.5px] text-success">
+              Email verified — your account is fully set up.
+            </div>
+          ) : null}
           <div className="text-[22px] font-semibold tracking-[-0.02em] text-ink">Welcome to Proofline, {firstName}</div>
           <p className="mt-2 text-[13px] text-muted">Your workspace is ready. Three steps to your first grounded AI reply:</p>
           <div className="mt-6 flex flex-col gap-3">

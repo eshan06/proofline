@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ExternalLink, LogOut } from "lucide-react";
 import { Logo } from "./logo";
 import { NAV_ITEMS } from "./nav-items";
+import { OnboardingChecklist } from "./onboarding-checklist";
 import { toast } from "@/stores/toasts";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -80,6 +81,8 @@ export function Sidebar({
           );
         })}
       </nav>
+
+      <OnboardingChecklist />
 
       {/* footer */}
       <div className="mt-auto flex flex-col gap-2 p-2.5">

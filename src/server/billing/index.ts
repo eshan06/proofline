@@ -22,8 +22,15 @@ export interface WebhookResult {
   handled: boolean;
 }
 
+export interface PortalInput {
+  stripeCustomerId: string;
+  returnUrl: string;
+}
+
 export interface BillingProvider {
   createCheckoutSession(input: CheckoutInput): Promise<{ url: string }>;
+  /** Create a Stripe Customer Portal session for an existing subscriber. */
+  portal(input: PortalInput): Promise<{ url: string }>;
   /** Verify the signature and parse the event; persist any subscription change. Throws on bad signature. */
   handleWebhook(payload: string, signature: string | null): Promise<WebhookResult>;
 }
@@ -38,6 +45,11 @@ class MockBillingProvider implements BillingProvider {
     await repo().setSubscription(input.workspaceId, { plan, status: "active", seats: planSeatLimit(plan) });
     logger.info("billing.mock_checkout", { workspaceId: input.workspaceId, plan });
     return { url: `${input.successUrl}?mock_checkout=1&plan=${input.plan}` };
+  }
+
+  async portal(input: PortalInput): Promise<{ url: string }> {
+    logger.info("billing.mock_portal", { customerId: input.stripeCustomerId });
+    return { url: input.returnUrl };
   }
 
   async handleWebhook(payload: string): Promise<WebhookResult> {
@@ -85,6 +97,24 @@ class StripeBillingProvider implements BillingProvider {
     }
     const data = (await res.json()) as { url?: string };
     if (!data.url) throw new Error("Stripe did not return a checkout URL.");
+    return { url: data.url };
+  }
+
+  async portal(input: PortalInput): Promise<{ url: string }> {
+    const form = new URLSearchParams();
+    form.set("customer", input.stripeCustomerId);
+    form.set("return_url", input.returnUrl);
+    const res = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {
+      method: "POST",
+      headers: { authorization: `Bearer ${this.secretKey}`, "content-type": "application/x-www-form-urlencoded" },
+      body: form,
+    });
+    if (!res.ok) {
+      logger.error("billing.stripe_portal_error", { status: res.status, body: (await res.text().catch(() => "")).slice(0, 300) });
+      throw new Error("Could not create Stripe billing portal session.");
+    }
+    const data = (await res.json()) as { url?: string };
+    if (!data.url) throw new Error("Stripe did not return a portal URL.");
     return { url: data.url };
   }
 

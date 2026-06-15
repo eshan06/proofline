@@ -92,12 +92,13 @@ export function welcomeEmail(to: string, name: string): EmailMessage {
   };
 }
 
-export function inviteEmail(to: string, workspaceName: string, role: string): EmailMessage {
+export function inviteEmail(to: string, workspaceName: string, role: string, inviteToken: string): EmailMessage {
+  const link = `${APP_URL}/accept-invite?token=${encodeURIComponent(inviteToken)}`;
   return {
     to,
     subject: `You've been invited to ${workspaceName} on Proofline`,
-    text: `You've been invited to ${workspaceName} as ${role}. Accept at ${APP_URL}/signin`,
-    html: `<p>You've been invited to <strong>${escape(workspaceName)}</strong> on Proofline as <strong>${escape(role)}</strong>.</p><p><a href="${APP_URL}/signin">Accept the invite</a> — this link is valid for 7 days.</p>`,
+    text: `You've been invited to ${workspaceName} as ${role}. Accept your invite (valid 7 days): ${link}`,
+    html: `<p>You've been invited to <strong>${escape(workspaceName)}</strong> on Proofline as <strong>${escape(role)}</strong>.</p><p><a href="${link}">Accept the invite</a> — this link is valid for 7 days.</p><p>If you didn't expect this invitation, you can safely ignore this email.</p>`,
   };
 }
 

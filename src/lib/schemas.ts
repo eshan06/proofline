@@ -224,6 +224,8 @@ export const memberSchema = z.object({
   role: memberRoleSchema,
   init: z.string(),
   status: z.enum(["Active", "Invited"]),
+  /** Server-assigned user id; null for seed/demo members that have no real DB row. */
+  userId: z.string().nullable().optional(),
 });
 export type Member = z.infer<typeof memberSchema>;
 
@@ -394,6 +396,10 @@ export const integrationPatchSchema = z.object({
 
 export const inviteMemberSchema = z.object({
   email: z.string().email(),
+  role: memberRoleSchema,
+});
+
+export const memberRolePatchSchema = z.object({
   role: memberRoleSchema,
 });
 

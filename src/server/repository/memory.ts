@@ -284,6 +284,15 @@ export class MemoryRepository implements Repository {
     const u = this.userById(userId);
     if (u) u.emailVerified = true;
   }
+  async consumeEmailVerificationAtomic(token: string): Promise<string | null> {
+    const t = this.authTokens.get(token);
+    if (!t || t.kind !== "verify") return null;
+    this.authTokens.delete(token);
+    if (t.expiresAt < Date.now()) return null;
+    const u = this.userById(t.userId);
+    if (u) u.emailVerified = true;
+    return t.userId;
+  }
 
   async deleteWorkspace(workspaceId: string): Promise<void> {
     this.workspaces.delete(workspaceId);
@@ -369,6 +378,11 @@ export class MemoryRepository implements Repository {
 
   async renameWorkspace(workspaceId: string, name: string): Promise<void> {
     this.ws(workspaceId).name = name;
+  }
+  async patchWidgetConfig(workspaceId: string, patch: { allowedOrigins?: string[]; enabled?: boolean }): Promise<void> {
+    const d = this.ws(workspaceId);
+    if (patch.allowedOrigins !== undefined) d.widget.allowedOrigins = patch.allowedOrigins;
+    if (patch.enabled !== undefined) d.widget.enabled = patch.enabled;
   }
 
   async getKbDocs(workspaceId: string): Promise<KbDoc[]> {
@@ -516,6 +530,58 @@ export class MemoryRepository implements Repository {
     };
     this.ws(workspaceId).members.push(member);
     return member;
+  }
+
+  async acceptInvite(input: { workspaceId: string; email: string; role: string; name?: string; passwordHash?: string }): Promise<{ userId: string }> {
+    const normalizedEmail = input.email.toLowerCase();
+    // Activate the invited member entry in the workspace list.
+    const ws = this.ws(input.workspaceId);
+    const memberEntry = ws.members.find((m) => m.email.toLowerCase() === normalizedEmail);
+    if (memberEntry) {
+      if (input.name) memberEntry.name = input.name;
+      memberEntry.status = "Active";
+    }
+    // Find or create the user record (users Map is keyed by email).
+    let userRec = this.users.get(normalizedEmail);
+    if (userRec) {
+      if (input.name) userRec.name = input.name;
+      if (input.passwordHash) userRec.passwordHash = input.passwordHash;
+    } else {
+      const local = normalizedEmail.split("@")[0] ?? "teammate";
+      userRec = {
+        id: `u_mem_${Date.now()}`,
+        email: normalizedEmail,
+        name: input.name ?? (local.charAt(0).toUpperCase() + local.slice(1)),
+        passwordHash: input.passwordHash ?? null,
+        emailVerified: false,
+      };
+      this.users.set(normalizedEmail, userRec);
+      this.memberships.push({ userId: userRec.id, workspaceId: input.workspaceId, role: input.role as MemberRole });
+    }
+    return { userId: userRec.id };
+  }
+
+  async updateMemberRole(workspaceId: string, userId: string, role: MemberRole): Promise<Member> {
+    const d = this.ws(workspaceId);
+    // Find the membership by userId in this.memberships (used for role checks)
+    const memEntry = this.memberships.find((m) => m.userId === userId && m.workspaceId === workspaceId);
+    if (!memEntry) throw new NotFoundError(`No membership for user ${userId} in this workspace`);
+    memEntry.role = role;
+    // Also update the denormalised member record stored on the workspace
+    const member = d.members.find((m) => {
+      // members are keyed by email; resolve via users
+      const u = [...this.users.values()].find((u) => u.id === userId);
+      return u ? m.email === u.email : false;
+    });
+    if (member) member.role = role;
+    const u = [...this.users.values()].find((u) => u.id === userId);
+    return {
+      name: u?.name ?? userId,
+      email: u?.email ?? "",
+      role,
+      init: (u?.name ?? userId).charAt(0).toUpperCase(),
+      status: member?.status ?? "Active",
+    };
   }
 
   async patchCopilot(workspaceId: string, patch: Partial<CopilotSettings>): Promise<CopilotSettings> {
