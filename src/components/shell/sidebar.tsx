@@ -41,6 +41,7 @@ export function Sidebar({
       <button
         type="button"
         onClick={() => toast("Workspace switcher — coming with multi-workspace support")}
+        aria-label="Workspace menu"
         className="m-2.5 flex cursor-pointer items-center gap-[9px] rounded-lg border-0 bg-transparent p-2 px-[9px] text-left hover:bg-white/5"
       >
         <Logo size={26} />

@@ -640,12 +640,11 @@ export class PgRepository implements Repository {
     if (existingUser) {
       userId = existingUser.id;
       // Update the account with a real name and/or password if provided.
-      const updates: Record<string, unknown> = {};
+      // Clicking an invite link proves ownership of the email address.
+      const updates: Record<string, unknown> = { emailVerified: true };
       if (input.name) updates.name = input.name;
       if (input.passwordHash) updates.passwordHash = input.passwordHash;
-      if (Object.keys(updates).length) {
-        await this.db.update(s.users).set(updates).where(eq(s.users.id, userId));
-      }
+      await this.db.update(s.users).set(updates).where(eq(s.users.id, userId));
     } else {
       // No placeholder user — create a full account now.
       const local = normalizedEmail.split("@")[0] ?? "teammate";
@@ -655,6 +654,7 @@ export class PgRepository implements Repository {
         email: normalizedEmail,
         name: input.name ?? (local.charAt(0).toUpperCase() + local.slice(1)),
         passwordHash: input.passwordHash ?? null,
+        emailVerified: true,
       });
     }
 

@@ -2,8 +2,8 @@
 
 import { usePathname } from "next/navigation";
 import { Bell, Search } from "lucide-react";
+import Link from "next/link";
 import { useUiStore } from "@/stores/ui";
-import { toast } from "@/stores/toasts";
 import { Kbd } from "@/components/ui/kbd";
 import { PAGE_TITLES } from "./nav-items";
 import { NotificationsPopover } from "./notifications";
@@ -38,6 +38,7 @@ export function Topbar({
       <button
         type="button"
         onClick={() => togglePalette()}
+        aria-label="Open command palette"
         className="pl-focus-visible flex w-[220px] cursor-pointer items-center gap-2 rounded-[7px] border border-white/8 bg-white/4 px-2.5 py-[5px] text-left text-[12px] text-muted hover:border-accent/50 hover:text-ink-4"
       >
         <Search size={13} strokeWidth={1.4} />
@@ -56,14 +57,13 @@ export function Topbar({
         <span className="absolute right-1.5 top-[5px] h-[7px] w-[7px] rounded-full border-2 border-panel bg-danger" />
       </button>
 
-      <button
-        type="button"
-        onClick={() => toast("Docs & support — opening help center")}
-        aria-label="Help"
-        className="pl-focus-visible flex h-[30px] w-[30px] items-center justify-center rounded-[7px] border-0 bg-transparent text-[13px] text-ink-4 hover:bg-white/6 hover:text-ink"
+      <Link
+        href="/docs"
+        aria-label="Help & documentation"
+        className="pl-focus-visible flex h-[30px] w-[30px] items-center justify-center rounded-[7px] border-0 bg-transparent text-[13px] text-ink-4 no-underline hover:bg-white/6 hover:text-ink"
       >
         ?
-      </button>
+      </Link>
 
       <span
         className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-accent/30 bg-accent/18 text-[11px] font-semibold text-accent-soft"

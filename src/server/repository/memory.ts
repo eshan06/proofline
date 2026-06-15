@@ -546,6 +546,7 @@ export class MemoryRepository implements Repository {
     if (userRec) {
       if (input.name) userRec.name = input.name;
       if (input.passwordHash) userRec.passwordHash = input.passwordHash;
+      userRec.emailVerified = true;
     } else {
       const local = normalizedEmail.split("@")[0] ?? "teammate";
       userRec = {
@@ -553,7 +554,7 @@ export class MemoryRepository implements Repository {
         email: normalizedEmail,
         name: input.name ?? (local.charAt(0).toUpperCase() + local.slice(1)),
         passwordHash: input.passwordHash ?? null,
-        emailVerified: false,
+        emailVerified: true,
       };
       this.users.set(normalizedEmail, userRec);
       this.memberships.push({ userId: userRec.id, workspaceId: input.workspaceId, role: input.role as MemberRole });
