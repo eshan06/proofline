@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
+import Link from "next/link";
 import { CustomerAvatar } from "@/components/ui/avatar";
 import { ChannelIcon } from "@/components/shared/channel-icon";
 import { useWorkspace } from "@/hooks/use-workspace";
@@ -108,13 +109,12 @@ function Profile({
           <span className="h-1.5 w-1.5 rounded-full" style={{ background: sentimentColor[customer.sentiment] }} />
           <span>{customer.sentiment}</span>
         </span>
-        <button
-          type="button"
-          onClick={() => toast(`Compose email to ${customer.email}`)}
-          className="rounded-[7px] border border-white/9 bg-white/5 px-3 py-1.5 text-[12px] font-medium text-ink-2 hover:bg-white/9"
+        <Link
+          href={`mailto:${customer.email}`}
+          className="rounded-[7px] border border-white/9 bg-white/5 px-3 py-1.5 text-[12px] font-medium text-ink-2 no-underline hover:bg-white/9"
         >
           Email
-        </button>
+        </Link>
       </div>
 
       <div className="mt-5 grid grid-cols-3 gap-2.5">

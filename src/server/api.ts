@@ -97,4 +97,17 @@ export function handleApi<T>(fn: () => Promise<T>): Promise<NextResponse> {
 /** Product analytics — flows through the structured logger; seam for a real pipeline. */
 export function trackEvent(session: SessionInfo, name: string, props?: Record<string, unknown>) {
   logger.event(name, { session: session.id.slice(0, 12), sessionType: session.type, ...props });
+  const endpoint = process.env.ANALYTICS_ENDPOINT;
+  if (endpoint) {
+    void fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: name,
+        sessionType: session.type,
+        sessionId: session.id.slice(0, 12),
+        properties: props,
+      }),
+    }).catch(() => {});
+  }
 }

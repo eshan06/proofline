@@ -54,7 +54,9 @@ export function Topbar({
         className="pl-focus-visible relative flex h-[30px] w-[30px] items-center justify-center rounded-[7px] border-0 bg-transparent text-ink-4 hover:bg-white/6 hover:text-ink"
       >
         <Bell size={15} strokeWidth={1.4} />
-        <span className="absolute right-1.5 top-[5px] h-[7px] w-[7px] rounded-full border-2 border-panel bg-danger" />
+        {notifications.length > 0 && (
+          <span className="absolute right-1.5 top-[5px] h-[7px] w-[7px] rounded-full border-2 border-panel bg-danger" />
+        )}
       </button>
 
       <Link

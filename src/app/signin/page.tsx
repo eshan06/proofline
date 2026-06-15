@@ -15,6 +15,7 @@ function SignInInner() {
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get("next") || "/home";
+  const sessionExpired = params.get("reason") === "expired";
   const resetSuccess = params.get("reset") === "1";
   const verifyFailed = params.get("verify") === "failed";
 
@@ -59,6 +60,11 @@ function SignInInner() {
           </p>
         </div>
 
+        {sessionExpired ? (
+          <div className="rounded-[8px] border border-warning/30 bg-warning/[0.06] px-4 py-3 text-[12.5px] text-warning-soft">
+            Your session has expired — please sign in to continue.
+          </div>
+        ) : null}
         {resetSuccess ? (
           <div className="rounded-[8px] border border-success/30 bg-success/10 px-4 py-3 text-[12.5px] text-ink-2">
             Password changed — sign in with your new password.

@@ -28,7 +28,7 @@ export function AppShell({ shell, children }: { shell: Shell; children: React.Re
   // A present-but-invalid session (expired cookie) surfaces as a 401 on the
   // client workspace fetch — bounce to sign-in.
   useEffect(() => {
-    if (error instanceof ApiClientError && error.status === 401) router.replace("/signin");
+    if (error instanceof ApiClientError && error.status === 401) router.replace("/signin?reason=expired");
   }, [error, router]);
 
   // Light shell first; the full workspace (when loaded) wins so the chrome
