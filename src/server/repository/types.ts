@@ -190,6 +190,7 @@ export interface Repository {
   patchIntegration(workspaceId: string, key: IntegrationKey, connected: boolean): Promise<Integration>;
   inviteMember(workspaceId: string, email: string, role: MemberRole): Promise<Member>;
   updateMemberRole(workspaceId: string, userId: string, role: MemberRole): Promise<Member>;
+  removeMember(workspaceId: string, userId: string): Promise<void>;
   /**
    * Accept an invite for `email` on `workspaceId`.
    * - If `passwordHash` is supplied, a new user account is created (or an

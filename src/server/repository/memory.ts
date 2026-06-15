@@ -584,6 +584,19 @@ export class MemoryRepository implements Repository {
     };
   }
 
+  async removeMember(workspaceId: string, userId: string): Promise<void> {
+    const memIdx = this.memberships.findIndex((m) => m.userId === userId && m.workspaceId === workspaceId);
+    if (memIdx === -1) throw new NotFoundError(`No membership for user ${userId} in this workspace`);
+    this.memberships.splice(memIdx, 1);
+    // Also remove from the denormalised ws.members array (keyed by email).
+    const u = [...this.users.values()].find((u) => u.id === userId);
+    if (u) {
+      const ws = this.ws(workspaceId);
+      const mIdx = ws.members.findIndex((m) => m.email.toLowerCase() === u.email.toLowerCase());
+      if (mIdx !== -1) ws.members.splice(mIdx, 1);
+    }
+  }
+
   async patchCopilot(workspaceId: string, patch: Partial<CopilotSettings>): Promise<CopilotSettings> {
     const d = this.ws(workspaceId);
     d.copilot = { ...d.copilot, ...patch };

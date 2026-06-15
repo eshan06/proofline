@@ -66,7 +66,7 @@ export function SettingsView({ tab }: { tab: Tab }) {
           })}
         </div>
 
-        {tab === "team" ? <TeamTab members={members} onInvite={() => setInviteOpen(true)} /> : null}
+        {tab === "team" ? <TeamTab members={members} currentUserEmail={ws?.currentUser?.email} onInvite={() => setInviteOpen(true)} /> : null}
         {tab === "workspace" ? <WorkspaceTab initialName={ws?.name ?? "Acme Inc"} /> : null}
         {tab === "billing" ? <BillingTab subscription={ws?.subscription} usage={ws ? billingUsage(ws) : []} /> : null}
         {tab === "audit" ? <AuditTab audit={audit} filter={auditFilter} setFilter={setAuditFilter} /> : null}
@@ -120,7 +120,41 @@ function RoleButton({ member }: { member: Member }) {
   );
 }
 
-function TeamTab({ members, onInvite }: { members: Member[]; onInvite: () => void }) {
+function RemoveButton({ member }: { member: Member }) {
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+
+  const remove = async () => {
+    if (!member.userId) {
+      toast("Member removal is not available for demo members");
+      return;
+    }
+    if (!window.confirm(`Remove ${member.name} from the workspace?`)) return;
+    setBusy(true);
+    try {
+      await api.removeMember(member.userId);
+      await queryClient.invalidateQueries({ queryKey: WORKSPACE_KEY });
+      toast(`${member.name} has been removed`);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not remove member");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={remove}
+      disabled={busy}
+      className="flex items-center rounded-[6px] border border-white/7 bg-transparent px-[9px] py-[3px] text-[11px] text-muted hover:border-danger/40 hover:text-danger disabled:opacity-40"
+    >
+      {busy ? "…" : "Remove"}
+    </button>
+  );
+}
+
+function TeamTab({ members, currentUserEmail, onInvite }: { members: Member[]; currentUserEmail: string | undefined; onInvite: () => void }) {
   return (
     <div className="mt-[18px] flex flex-col gap-3.5" style={{ animation: "plFade 0.2s ease" }}>
       <div className="overflow-hidden rounded-[11px] border border-white/7 bg-card">
@@ -132,6 +166,7 @@ function TeamTab({ members, onInvite }: { members: Member[]; onInvite: () => voi
         </div>
         {members.map((m) => {
           const ag = agents[m.name.split(" ")[0] as keyof typeof agents];
+          const isSelf = currentUserEmail && m.email.toLowerCase() === currentUserEmail.toLowerCase();
           return (
             <div key={m.email} className="flex items-center gap-[11px] border-b border-white/[0.04] px-4 py-[11px]">
               <div className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold" style={{ background: ag?.bg ?? "rgba(77,124,254,0.12)", color: ag?.fg ?? "#9DB7FF" }}>{m.init}</div>
@@ -144,6 +179,7 @@ function TeamTab({ members, onInvite }: { members: Member[]; onInvite: () => voi
                 <span>{m.status}</span>
               </span>
               <RoleButton member={m} />
+              {!isSelf ? <RemoveButton member={m} /> : null}
             </div>
           );
         })}

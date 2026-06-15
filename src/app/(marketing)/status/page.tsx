@@ -2,6 +2,12 @@ import { MarketingPage } from "@/components/marketing/marketing-page";
 
 export const metadata = { title: "Status — Proofline" };
 
+const BUILD_DATE = new Date().toLocaleDateString("en-US", {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+});
+
 const components = [
   { name: "Web app", status: "Operational" },
   { name: "API", status: "Operational" },
@@ -17,6 +23,11 @@ export default function StatusPage() {
         <span className="h-2.5 w-2.5 rounded-full bg-success" style={{ boxShadow: "0 0 8px rgba(61,214,140,0.6)" }} />
         <span className="text-[14px] font-semibold text-success">All systems operational</span>
       </div>
+
+      <p className="mt-3 text-[13px] text-ink-2">
+        We self-report status on this page. For real-time monitoring, subscribe below or contact our support team directly.
+      </p>
+
       <div className="mt-2 flex flex-col overflow-hidden rounded-[11px] border border-white/8">
         {components.map((c, i) => (
           <div key={c.name} className="flex items-center justify-between px-4 py-3" style={{ borderTop: i ? "1px solid rgba(255,255,255,0.06)" : undefined }}>
@@ -28,7 +39,27 @@ export default function StatusPage() {
           </div>
         ))}
       </div>
-      <p className="text-[12.5px] text-muted">Incident history and subscribe-to-updates are wired through the status provider in production.</p>
+
+      <p className="mt-2 text-[12px] text-muted">Last updated: {BUILD_DATE}</p>
+
+      <div className="mt-6">
+        <h2 className="text-[14px] font-semibold text-ink-1">How to check independently</h2>
+        <ul className="mt-2 space-y-1.5 text-[13px] text-ink-2">
+          <li>• Hit the health endpoint directly: <code className="rounded bg-white/5 px-1 py-0.5 text-[12px] text-ink-1">GET https://app.proofline.com/api/health</code> — a <code className="rounded bg-white/5 px-1 py-0.5 text-[12px] text-ink-1">200 OK</code> means the API is up.</li>
+          <li>• Check <a href="https://downdetector.com" className="underline underline-offset-2 hover:text-ink-1">Downdetector</a> or your own uptime monitor against the API URL above.</li>
+          <li>• Review your account&apos;s recent activity log inside the app for any ingestion or delivery errors.</li>
+        </ul>
+      </div>
+
+      <div className="mt-6 rounded-[10px] border border-white/8 bg-white/[0.03] px-4 py-3.5">
+        <p className="text-[13px] text-ink-2">
+          For automated alerts, contact{" "}
+          <a href="mailto:support@proofline.com" className="text-ink-1 underline underline-offset-2 hover:text-ink-1/80">
+            support@proofline.com
+          </a>{" "}
+          to be added to our incident notification list.
+        </p>
+      </div>
     </MarketingPage>
   );
 }

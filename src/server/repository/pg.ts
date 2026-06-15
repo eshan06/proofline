@@ -692,6 +692,14 @@ export class PgRepository implements Repository {
     return { name: local, email: user.email, role, init: local.charAt(0).toUpperCase(), status: (mem?.status ?? "Active") as "Active" | "Invited" };
   }
 
+  async removeMember(workspaceId: string, userId: string): Promise<void> {
+    const deleted = await this.db
+      .delete(s.memberships)
+      .where(and(eq(s.memberships.workspaceId, workspaceId), eq(s.memberships.userId, userId)))
+      .returning({ userId: s.memberships.userId });
+    if (!deleted.length) throw new NotFoundError(`No membership for user ${userId} in this workspace`);
+  }
+
   async patchCopilot(workspaceId: string, patch: Partial<CopilotSettings>): Promise<CopilotSettings> {
     await this.db.update(s.copilotSettings).set({
       ...(patch.tone && { tone: patch.tone }),

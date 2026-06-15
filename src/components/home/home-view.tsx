@@ -115,6 +115,11 @@ export function HomeView() {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto" style={{ animation: "plFade 0.22s ease" }}>
       <div className="mx-auto max-w-[1060px] px-8 pb-10 pt-[26px]">
+        {verified ? (
+          <div className="mb-4 rounded-[10px] border border-success/30 bg-success/[0.06] px-4 py-3 text-[12.5px] text-success">
+            Email verified — your account is fully set up.
+          </div>
+        ) : null}
         {/* greeting + quick actions */}
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-[3px]">

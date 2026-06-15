@@ -71,6 +71,9 @@ export const api = {
   patchMemberRole: (userId: string, role: "Admin" | "Agent" | "Viewer") =>
     request(`/api/members/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) }),
 
+  removeMember: (userId: string) =>
+    request(`/api/members/${userId}`, { method: "DELETE" }),
+
   playground: async (question: string): Promise<PlaygroundResult> =>
     playgroundResultSchema.parse(
       await request("/api/playground", { method: "POST", body: JSON.stringify({ question }) }),

@@ -30,6 +30,7 @@ Copy from `.env.example`. Minimum for a real deployment:
 | `EMBEDDINGS_PROVIDER` + `OPENAI_API_KEY` | for semantic RAG | `=openai`; re-index the KB after switching (lexical→semantic). |
 | `EMAIL_PROVIDER` + `RESEND_API_KEY` + `EMAIL_FROM` | for email | `=resend`; verify your sending domain in Resend first. |
 | `BILLING_PROVIDER` + `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` + `STRIPE_PRICE_GROWTH` + `STRIPE_PRICE_SCALE` | to charge | see §5. |
+| `INVITE_SECRET` | ✅ (prod) | HMAC-SHA256 signing key for invite tokens. Falls back to a hardcoded dev key if unset — **insecure in production; always set this**. Generate with `openssl rand -hex 32`. |
 | `ERROR_WEBHOOK_URL` | optional | Slack/Discord webhook for error alerts. |
 | `DB_SSL` | optional | `verify` (strict, with `NODE_EXTRA_CA_CERTS` = your provider CA) or `disable`. |
 
@@ -122,6 +123,7 @@ docker run -p 3000:3000 --env-file .env.production proofline
 3. `/widget-preview` → send a chat → it appears in `/inbox` → reply → it returns to the widget.
 4. Open a ticket → generate a draft → confirm it's grounded with citations + a confidence score.
 5. Confirm session cookies are `Secure` (HTTPS) in the browser devtools.
+6. **Invite flow:** Settings → Members → invite a second email → accept via the link in the email → confirm the new user lands in the workspace. (Validates `INVITE_SECRET` is wired correctly; a broken secret silently rejects all invite tokens.)
 
 ## 7. Hardening before scale
 
