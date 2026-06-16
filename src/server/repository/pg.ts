@@ -1,4 +1,4 @@
-import { and, eq, asc, desc, inArray, sql, or, ne, lt } from "drizzle-orm";
+import { and, eq, asc, desc, inArray, sql, or, ne, lt, gt, notExists } from "drizzle-orm";
 import { getDb, type Db } from "@/server/db/client";
 import * as s from "@/server/db/schema";
 import type {
@@ -187,6 +187,53 @@ export class PgRepository implements Repository {
 
   async deleteSession(id: string): Promise<void> {
     await this.db.delete(s.sessions).where(eq(s.sessions.id, id));
+  }
+
+  async cleanupExpired(): Promise<{ sessionsDeleted: number; demoWorkspacesDeleted: number }> {
+    const now = new Date();
+    // 1. Purge expired sessions (demo + regular). getSession deletes lazily on
+    //    read; this collects the ones nobody read again.
+    const deletedSessions = await this.db
+      .delete(s.sessions)
+      .where(lt(s.sessions.expiresAt, now))
+      .returning({ id: s.sessions.id });
+
+    // 2. Reap abandoned demo workspaces. A demo workspace never has a membership
+    //    (real signups always create the owner's), so "no membership" identifies
+    //    one. Require it to be older than the demo TTL with no live session, which
+    //    also rules out reaping a workspace mid-provisioning (created → seeded →
+    //    session, all within the TTL window). The delete cascades to every child
+    //    row, including kb_chunks (the pgvector embeddings).
+    const cutoff = new Date(Date.now() - DEMO_TTL_MS);
+    const orphans = await this.db
+      .select({ id: s.workspaces.id })
+      .from(s.workspaces)
+      .where(
+        and(
+          lt(s.workspaces.createdAt, cutoff),
+          notExists(
+            this.db
+              .select({ one: sql`1` })
+              .from(s.memberships)
+              .where(eq(s.memberships.workspaceId, s.workspaces.id)),
+          ),
+          notExists(
+            this.db
+              .select({ one: sql`1` })
+              .from(s.sessions)
+              .where(and(eq(s.sessions.workspaceId, s.workspaces.id), gt(s.sessions.expiresAt, now))),
+          ),
+        ),
+      );
+    if (orphans.length) {
+      await this.db.delete(s.workspaces).where(
+        inArray(
+          s.workspaces.id,
+          orphans.map((o) => o.id),
+        ),
+      );
+    }
+    return { sessionsDeleted: deletedSessions.length, demoWorkspacesDeleted: orphans.length };
   }
 
   async consumeAiCall(sessionId: string): Promise<boolean> {

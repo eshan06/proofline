@@ -102,6 +102,13 @@ export interface Repository {
   }): Promise<SessionInfo>;
   getSession(id: string): Promise<SessionInfo | null>;
   deleteSession(id: string): Promise<void>;
+  /**
+   * Reap expired sessions and abandoned demo workspaces (no membership, no live
+   * session, older than the demo TTL). The workspace delete cascades to all its
+   * child rows, including the seeded pgvector embeddings. For a scheduled job —
+   * without it, every /demo visit leaks a workspace + its embeddings forever.
+   */
+  cleanupExpired(): Promise<{ sessionsDeleted: number; demoWorkspacesDeleted: number }>;
   /** false when a demo session has exhausted its AI budget. */
   consumeAiCall(sessionId: string): Promise<boolean>;
   completeDemoStep(sessionId: string, step: DemoStep): Promise<boolean>;

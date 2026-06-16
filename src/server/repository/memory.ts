@@ -188,6 +188,34 @@ export class MemoryRepository implements Repository {
     this.sessions.delete(id);
   }
 
+  async cleanupExpired(): Promise<{ sessionsDeleted: number; demoWorkspacesDeleted: number }> {
+    const now = Date.now();
+    // 1. Purge expired sessions.
+    let sessionsDeleted = 0;
+    for (const [id, rec] of this.sessions) {
+      if (now - rec.lastSeen > rec.ttl) {
+        this.sessions.delete(id);
+        sessionsDeleted += 1;
+      }
+    }
+    // 2. Reap abandoned demo workspaces: no membership (demo workspaces never get
+    //    one) and no remaining live session. The in-memory store has no createdAt
+    //    timestamp, but it's the dev/test/demo backend only — production always
+    //    has DATABASE_URL → PgRepository, which additionally guards on createdAt.
+    let demoWorkspacesDeleted = 0;
+    for (const wsId of [...this.workspaces.keys()]) {
+      const hasMembership = this.memberships.some((m) => m.workspaceId === wsId);
+      const hasLiveSession = [...this.sessions.values()].some(
+        (rec) => rec.workspaceId === wsId && now - rec.lastSeen <= rec.ttl,
+      );
+      if (!hasMembership && !hasLiveSession) {
+        this.workspaces.delete(wsId);
+        demoWorkspacesDeleted += 1;
+      }
+    }
+    return { sessionsDeleted, demoWorkspacesDeleted };
+  }
+
   async consumeAiCall(sessionId: string): Promise<boolean> {
     const rec = this.sessions.get(sessionId);
     if (!rec) return true;

@@ -125,7 +125,21 @@ docker run -p 3000:3000 --env-file .env.production proofline
 5. Confirm session cookies are `Secure` (HTTPS) in the browser devtools.
 6. **Invite flow:** Settings → Members → invite a second email → accept via the link in the email → confirm the new user lands in the workspace. (Validates `INVITE_SECRET` is wired correctly; a broken secret silently rejects all invite tokens.)
 
-## 7. Hardening before scale
+## 7. Scheduled cleanup (recommended if `/demo` is public)
+
+Each `/demo` visit seeds a throwaway workspace and embeds the seed KB into pgvector.
+Reap them so the database (and embedding cost) doesn't grow without bound:
+
+```bash
+# Set a secret, then hit the endpoint on a schedule (cron / Cloud Scheduler / a GitHub Action):
+CLEANUP_SECRET=$(openssl rand -hex 32)
+curl -fsS -X POST https://<domain>/api/admin/cleanup -H "x-cleanup-secret: $CLEANUP_SECRET"
+```
+
+It purges expired sessions and demo workspaces past the demo TTL with no live session
+(cascading their embeddings). Hourly is plenty. Inert (401) until `CLEANUP_SECRET` is set.
+
+## 8. Hardening before scale
 
 - Redis-backed rate limiting + (optional) sessions across instances (`REDIS_URL`).
 - `DB_SSL=verify` with your provider's CA bundle (`NODE_EXTRA_CA_CERTS`).
