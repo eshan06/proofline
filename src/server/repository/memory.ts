@@ -563,7 +563,7 @@ export class MemoryRepository implements Repository {
     } else {
       const local = normalizedEmail.split("@")[0] ?? "teammate";
       userRec = {
-        id: `u_mem_${Date.now()}`,
+        id: `u_mem_${uid("u")}`,
         email: normalizedEmail,
         name: input.name ?? (local.charAt(0).toUpperCase() + local.slice(1)),
         passwordHash: input.passwordHash ?? null,

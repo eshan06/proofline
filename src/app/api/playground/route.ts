@@ -1,5 +1,5 @@
 import { playgroundRequestSchema } from "@/lib/schemas";
-import { ApiError, handleApi, parseBody, requireSession, enforceRateLimit } from "@/server/api";
+import { ApiError, handleApi, parseBody, requireRole, requireSession, enforceRateLimit } from "@/server/api";
 import { LIMITS } from "@/server/rate-limit";
 import { getDraftProvider } from "@/server/ai";
 import { runAutomations } from "@/server/automations/engine";
@@ -9,6 +9,7 @@ export async function POST(req: Request) {
   return handleApi(async () => {
     await enforceRateLimit(req, "ai", LIMITS.ai);
     const session = await requireSession();
+    await requireRole(session, ["Admin", "Agent"]);
     const body = await parseBody(req, playgroundRequestSchema);
     const r = repo();
     if (!(await r.consumeAiCall(session.id))) {

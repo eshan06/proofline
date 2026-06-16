@@ -1,4 +1,4 @@
-import { ApiError, handleApi, requireSession } from "@/server/api";
+import { ApiError, handleApi, requireRole, requireSession } from "@/server/api";
 
 /**
  * Retrying the failed SSO guide always fails again — the document genuinely
@@ -7,7 +7,8 @@ import { ApiError, handleApi, requireSession } from "@/server/api";
  */
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   return handleApi(async () => {
-    await requireSession();
+    const session = await requireSession();
+    await requireRole(session, ["Admin", "Agent"]);
     await ctx.params;
     throw new ApiError(
       422,

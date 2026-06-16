@@ -1,4 +1,4 @@
-import { ApiError, handleApi, requireSession, trackEvent } from "@/server/api";
+import { ApiError, handleApi, requireRole, requireSession, trackEvent } from "@/server/api";
 import { MOCK_LATENCY } from "@/server/ai/provider";
 import { repo } from "@/server/repository";
 import { hasDatabase } from "@/server/db/client";
@@ -21,6 +21,7 @@ import { logger } from "@/server/logger";
 export async function POST(req: Request) {
   return handleApi(async () => {
     const session = await requireSession();
+    await requireRole(session, ["Admin", "Agent"]);
     const r = repo();
     const contentType = req.headers.get("content-type") ?? "";
 

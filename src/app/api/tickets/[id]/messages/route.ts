@@ -1,5 +1,5 @@
 import { postMessageSchema } from "@/lib/schemas";
-import { actorName, handleApi, parseBody, requireSession, trackEvent } from "@/server/api";
+import { actorName, handleApi, parseBody, requireRole, requireSession, trackEvent } from "@/server/api";
 import { repo } from "@/server/repository";
 import { dispatchEmailReply } from "@/server/email/dispatch";
 import { dispatchSlackReply } from "@/server/slack/dispatch";
@@ -7,6 +7,7 @@ import { dispatchSlackReply } from "@/server/slack/dispatch";
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   return handleApi(async () => {
     const session = await requireSession();
+    await requireRole(session, ["Admin", "Agent"]);
     const { id } = await ctx.params;
     const body = await parseBody(req, postMessageSchema);
     const r = repo();
