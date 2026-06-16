@@ -43,6 +43,13 @@ export function validateProductionEnv(): void {
     );
   }
 
+  const usesChannels = process.env.GMAIL_CLIENT_ID || process.env.SLACK_CLIENT_ID || process.env.SLACK_SIGNING_SECRET;
+  if (usesChannels && !process.env.TOKEN_ENC_KEY) {
+    warnings.push(
+      "A Gmail/Slack channel is configured but TOKEN_ENC_KEY is unset — their refresh/bot tokens would be stored unencrypted at rest. Set a 32-byte key (`openssl rand -hex 32`).",
+    );
+  }
+
   for (const w of warnings) logger.warn("env.config_warning", { message: w });
 
   if (errors.length) {

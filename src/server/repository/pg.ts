@@ -1,5 +1,6 @@
 import { and, eq, asc, desc, inArray, sql, or, ne, lt, gt, notExists } from "drizzle-orm";
 import { getDb, type Db } from "@/server/db/client";
+import { decryptSecret, encryptSecret } from "@/server/crypto";
 import * as s from "@/server/db/schema";
 import type {
   AIDraft,
@@ -891,13 +892,13 @@ export class PgRepository implements Repository {
       .where(eq(s.workspaces.id, workspaceId))
       .limit(1);
     if (!row?.address || !row.refreshToken) return null;
-    return { address: row.address, refreshToken: row.refreshToken };
+    return { address: row.address, refreshToken: decryptSecret(row.refreshToken)! };
   }
 
   async setGmailAccount(workspaceId: string, account: GmailAccount): Promise<void> {
     await this.db
       .update(s.workspaces)
-      .set({ gmailAddress: account.address.trim().toLowerCase(), gmailRefreshToken: account.refreshToken })
+      .set({ gmailAddress: account.address.trim().toLowerCase(), gmailRefreshToken: encryptSecret(account.refreshToken) })
       .where(eq(s.workspaces.id, workspaceId));
   }
 
@@ -1033,13 +1034,13 @@ export class PgRepository implements Repository {
       .where(eq(s.workspaces.id, workspaceId))
       .limit(1);
     if (!row?.botToken || !row.teamId) return null;
-    return { botToken: row.botToken, teamId: row.teamId, teamName: row.teamName ?? "" };
+    return { botToken: decryptSecret(row.botToken)!, teamId: row.teamId, teamName: row.teamName ?? "" };
   }
 
   async setSlackAccount(workspaceId: string, account: SlackAccount): Promise<void> {
     await this.db
       .update(s.workspaces)
-      .set({ slackBotToken: account.botToken, slackTeamId: account.teamId, slackTeamName: account.teamName })
+      .set({ slackBotToken: encryptSecret(account.botToken), slackTeamId: account.teamId, slackTeamName: account.teamName })
       .where(eq(s.workspaces.id, workspaceId));
   }
 
