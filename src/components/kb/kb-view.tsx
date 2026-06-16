@@ -11,10 +11,13 @@ import type { KbDoc } from "@/lib/schemas";
 
 const GRID = "grid-cols-[1fr_110px_120px_70px_70px_110px]";
 
+// Connectors are integration teasers with no sync backend yet, so none claim a
+// live "Connected" state with fabricated doc counts — that would mislead a real
+// workspace. All show an honest "Connect" affordance.
 const connectors = [
-  { glyph: "N", fg: "#E6EAF2", label: "Notion", meta: "5 docs syncing", btn: "Connected", btnFg: "#3DD68C", toastMsg: "Notion sync is healthy — next sync in 18m" },
-  { glyph: "G", fg: "#9DB7FF", label: "Google Docs", meta: "Not connected", btn: "Connect", btnFg: "#C6CCDA", toastMsg: "Google Docs OAuth flow — connect your account" },
-  { glyph: "H", fg: "#C4B0F8", label: "Help Center", meta: "1 collection", btn: "Connected", btnFg: "#3DD68C", toastMsg: "Help Center sync is healthy" },
+  { glyph: "N", fg: "#E6EAF2", label: "Notion", meta: "Not connected", btn: "Connect", btnFg: "#C6CCDA", toastMsg: "Notion sync is coming soon" },
+  { glyph: "G", fg: "#9DB7FF", label: "Google Docs", meta: "Not connected", btn: "Connect", btnFg: "#C6CCDA", toastMsg: "Google Docs sync is coming soon" },
+  { glyph: "H", fg: "#C4B0F8", label: "Help Center", meta: "Not connected", btn: "Connect", btnFg: "#C6CCDA", toastMsg: "Help Center sync is coming soon" },
 ];
 
 function statusStyle(status: KbDoc["status"]) {
@@ -29,6 +32,7 @@ export function KbView() {
   const queryClient = useQueryClient();
   const { data: ws } = useWorkspace();
   const docs = useMemo(() => ws?.kbDocs ?? [], [ws?.kbDocs]);
+  const failedDocs = useMemo(() => docs.filter((d) => d.status === "failed"), [docs]);
   const uploadingRef = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -192,13 +196,16 @@ export function KbView() {
           })}
         </div>
 
-        <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-faint">
-          <AlertTriangle size={13} strokeWidth={1.4} className="text-danger" />
-          <span>
-            1 source failed to index — “SSO configuration guide.pdf” exceeds the 50 MB limit. The AI
-            cannot answer SSO questions until this is fixed.
-          </span>
-        </div>
+        {failedDocs.length > 0 ? (
+          <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-faint">
+            <AlertTriangle size={13} strokeWidth={1.4} className="text-danger" />
+            <span>
+              {failedDocs.length} source{failedDocs.length === 1 ? "" : "s"} failed to index —{" "}
+              {failedDocs.map((d) => `“${d.name}”`).join(", ")}. The AI can’t cite{" "}
+              {failedDocs.length === 1 ? "it" : "them"} until re-uploaded.
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
