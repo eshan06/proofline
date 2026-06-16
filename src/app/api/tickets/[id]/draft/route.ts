@@ -33,10 +33,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       r.getCopilot(session.workspaceId),
     ]);
     const provider = getDraftProvider(session.workspaceId);
+    const opts = { threshold: copilot.threshold / 100, neverSay: copilot.neverSay };
     const result =
       body.action === "regenerate"
-        ? await provider.regenerate(ticket, kbDocs, { threshold: copilot.threshold / 100 })
-        : await provider.rewrite(ticket, body.tone);
+        ? await provider.regenerate(ticket, kbDocs, opts)
+        : await provider.rewrite(ticket, body.tone, opts);
 
     if (!result.draft) {
       throw new ApiError(409, result.failureReason);

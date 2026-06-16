@@ -21,6 +21,7 @@ export async function POST(req: Request) {
     ]);
     const result = await getDraftProvider(session.workspaceId).answer(body.question, kbDocs, {
       threshold: copilot.threshold / 100,
+      neverSay: copilot.neverSay,
     });
 
     // A low-confidence playground answer trips the safety net, just like a live

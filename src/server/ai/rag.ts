@@ -137,6 +137,21 @@ export function scoreConfidence(chunks: RetrievedChunk[], minSimilarity = GROUND
   return Math.max(0.45, Math.min(0.98, 0.5 + top * 0.5 + coverageBonus));
 }
 
+/**
+ * First "never say" phrase that appears in the drafted text (case-insensitive
+ * substring), or null if none do. Backs the copilot's "never say" policies: a
+ * hit withholds the AI draft and routes the ticket to a human.
+ */
+export function findNeverSayViolation(text: string, neverSay: string[] | undefined): string | null {
+  if (!neverSay?.length) return null;
+  const haystack = text.toLowerCase();
+  for (const phrase of neverSay) {
+    const needle = phrase.trim().toLowerCase();
+    if (needle && haystack.includes(needle)) return phrase;
+  }
+  return null;
+}
+
 /** Build display citations from retrieved chunks, de-duplicated by doc+path. */
 export function toCitations(chunks: RetrievedChunk[]): Citation[] {
   const seen = new Set<string>();

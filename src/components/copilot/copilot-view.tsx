@@ -13,7 +13,7 @@ const TONES: CopilotSettings["tone"][] = ["Friendly", "Concise", "Formal", "Tech
 const RISKS: { key: CopilotSettings["risk"]; label: string; desc: string }[] = [
   { key: "conservative", label: "Conservative", desc: "Only drafts with strong multi-source evidence. Everything else is flagged for a human." },
   { key: "balanced", label: "Balanced", desc: "Drafts whenever grounded sources exist; low confidence is flagged for review." },
-  { key: "autonomous", label: "Autonomous", desc: "Auto-sends replies above your confidence threshold. Humans audit after the fact." },
+  { key: "autonomous", label: "Autonomous", desc: "Drafts assertively for every grounded ticket above your threshold; an agent still confirms the send." },
 ];
 
 const ALLOWED = ["Link help-center docs", "Issue refunds ≤ $250", "Apply account credits", "Tag & route tickets"];

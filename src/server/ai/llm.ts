@@ -1,5 +1,14 @@
+import type { Tone } from "@/lib/schemas";
 import type { RetrievedChunk } from "./rag";
 import { logger } from "@/server/logger";
+
+export interface DraftInput {
+  question: string;
+  customerName?: string;
+  contexts: RetrievedChunk[];
+  /** Optional restyle: concise (brief) or empathetic (warmer). */
+  tone?: Tone;
+}
 
 /**
  * The generation half of the pipeline. A real deployment sets LLM_PROVIDER and
@@ -10,22 +19,38 @@ import { logger } from "@/server/logger";
  */
 export interface LLMProvider {
   /** Draft a support reply grounded ONLY in the provided context chunks. */
-  draftReply(input: { question: string; customerName?: string; contexts: RetrievedChunk[] }): Promise<string>;
+  draftReply(input: DraftInput): Promise<string>;
 }
 
 export class TemplateLLM implements LLMProvider {
-  async draftReply({ customerName, contexts }: { question: string; customerName?: string; contexts: RetrievedChunk[] }): Promise<string> {
+  async draftReply({ customerName, contexts, tone }: DraftInput): Promise<string> {
     const name = customerName?.split(" ")[0];
-    const greeting = name ? `Hi ${name} — ` : "Hi — ";
     const top = contexts[0];
     if (!top) {
+      const greeting = name ? `Hi ${name} — ` : "Hi — ";
       return `${greeting}thanks for reaching out. Let me look into this and follow up shortly.`;
     }
     // Ground the body in the highest-similarity passage; add the second source
-    // as supporting detail when it adds a distinct doc.
-    const body = firstSentences(top.content, 2);
+    // as supporting detail when it adds a distinct doc. Tone reshapes the
+    // framing around that same grounded body so the rewrite genuinely differs.
     const support = contexts.find((c) => c.docId !== top.docId);
+
+    if (tone === "concise") {
+      const greeting = name ? `Hi ${name}, ` : "Hi, ";
+      return `${greeting}${firstSentences(top.content, 1)}`.trim();
+    }
+
+    const body = firstSentences(top.content, 2);
     const supportLine = support ? ` ${firstSentences(support.content, 1)}` : "";
+
+    if (tone === "empathetic") {
+      const greeting = name
+        ? `Hi ${name} — thanks so much for your patience, and I'm sorry for the trouble. `
+        : "Hi — thanks so much for your patience, and I'm sorry for the trouble. ";
+      return `${greeting}${body}${supportLine}\n\nPlease don't hesitate to reply if there's anything else at all I can help with — I'm glad to.`;
+    }
+
+    const greeting = name ? `Hi ${name} — ` : "Hi — ";
     return `${greeting}thanks for the details. ${body}${supportLine}\n\nIf anything still looks off, reply here and we'll jump right back on it.`;
   }
 }
@@ -50,15 +75,22 @@ export class OpenAILLM implements LLMProvider {
     private model: string = process.env.AI_MODEL || "gpt-4o-mini",
   ) {}
 
-  async draftReply(input: { question: string; customerName?: string; contexts: RetrievedChunk[] }): Promise<string> {
+  async draftReply(input: DraftInput): Promise<string> {
     if (!input.contexts.length) return this.fallback.draftReply(input);
     const sources = input.contexts
       .map((c, i) => `[${i + 1}] ${c.docTitle}${c.path ? ` — ${c.path}` : ""}:\n${c.content}`)
       .join("\n\n");
+    const toneHint =
+      input.tone === "concise"
+        ? " Keep the reply brief and to the point — a sentence or two."
+        : input.tone === "empathetic"
+          ? " Lead with genuine empathy and reassurance; be especially warm."
+          : "";
     const system =
       "You are a customer-support agent. Write a concise, warm reply that answers the customer using ONLY the facts in the provided sources. " +
       "Never invent policies, numbers, dates, or commitments that aren't in the sources. If the sources don't fully answer the question, " +
-      "address what they do cover and offer to follow up. Do not mention the word 'sources' or any citation numbers in your reply.";
+      "address what they do cover and offer to follow up. Do not mention the word 'sources' or any citation numbers in your reply." +
+      toneHint;
     const user = `${input.customerName ? `Customer name: ${input.customerName}\n` : ""}Customer question:\n${input.question}\n\nSources:\n${sources}`;
     try {
       const res = await fetch("https://api.openai.com/v1/chat/completions", {

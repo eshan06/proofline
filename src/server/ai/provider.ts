@@ -16,15 +16,17 @@ export type DraftResult =
   | { draft: null; failureReason: string };
 
 export interface DraftProviderOptions {
-  /** Confidence threshold (0–1) below which drafts are flagged/held. */
+  /** Confidence threshold (0–1). A generated draft below it is held for human review. */
   threshold: number;
+  /** Phrases the copilot must never include; a match withholds the draft. */
+  neverSay?: string[];
 }
 
 export interface DraftProvider {
   /** Regenerate the draft for a ticket (full retrieval + drafting pass). */
   regenerate(ticket: Ticket, kb: KbDoc[], opts: DraftProviderOptions): Promise<DraftResult>;
-  /** Rewrite the current draft in a different tone (no re-retrieval). */
-  rewrite(ticket: Ticket, tone: Tone): Promise<DraftResult>;
+  /** Rewrite the current draft in a different tone. */
+  rewrite(ticket: Ticket, tone: Tone, opts: DraftProviderOptions): Promise<DraftResult>;
   /** Answer a free-form question against the knowledge base (playground / chat widget). */
   answer(question: string, kb: KbDoc[], opts: DraftProviderOptions): Promise<PlaygroundResult>;
 }
