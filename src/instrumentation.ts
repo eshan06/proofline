@@ -9,6 +9,11 @@ export async function register() {
   // Graceful DB-pool shutdown is registered in db/client.ts (a Node-only module).
 
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    // Fail fast on insecure production configuration (e.g. a forgeable invite
+    // signing key) before serving any traffic.
+    const { validateProductionEnv } = await import("@/server/env");
+    validateProductionEnv();
+
     const { setErrorSink } = await import("@/server/logger");
 
     // ── Sentry ───────────────────────────────────────────────────────────────

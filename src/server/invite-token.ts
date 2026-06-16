@@ -10,8 +10,9 @@
  * repeated calls with the same valid token are fine until it expires.
  */
 import crypto from "node:crypto";
+import { DEV_INVITE_SECRET } from "@/server/env";
 
-const SECRET = process.env.INVITE_SECRET ?? "dev-invite-secret-change-in-prod";
+const SECRET = process.env.INVITE_SECRET ?? DEV_INVITE_SECRET;
 const TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 function sign(payload: string): string {
