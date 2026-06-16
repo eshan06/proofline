@@ -1,6 +1,11 @@
-import { memberRolePatchSchema } from "@/lib/schemas";
+import { memberRolePatchSchema, type Member } from "@/lib/schemas";
 import { actorName, ApiError, handleApi, parseBody, requireSession, requireRole } from "@/server/api";
 import { repo } from "@/server/repository";
+
+/** Members who can actually administer the workspace right now (excludes pending invites). */
+function activeAdminCount(members: Member[]): number {
+  return members.filter((m) => m.role === "Admin" && m.status === "Active").length;
+}
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ userId: string }> }) {
   return handleApi(async () => {
@@ -11,6 +16,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ userId
 
     const body = await parseBody(req, memberRolePatchSchema);
     const r = repo();
+
+    // Guard: don't let the workspace lose its last active Admin by demotion.
+    if (body.role !== "Admin") {
+      const workspace = await r.getWorkspace(session.workspaceId);
+      const target = workspace.members.find((m) => m.userId === userId);
+      if (target?.role === "Admin" && target.status === "Active" && activeAdminCount(workspace.members) <= 1) {
+        throw new ApiError(400, "Cannot demote the last Admin — promote another member to Admin first.");
+      }
+    }
 
     const member = await r.updateMemberRole(session.workspaceId, userId, body.role);
     await r.appendAudit(session.workspaceId, {
@@ -36,11 +50,15 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ user
 
     const r = repo();
 
-    // Guard: do not allow removing the last Admin.
+    // Guard: do not allow removing the last *active* Admin. Pending (Invited)
+    // admins can't manage the workspace yet, so they don't satisfy the invariant.
     const workspace = await r.getWorkspace(session.workspaceId);
-    const adminCount = workspace.members.filter((m) => m.role === "Admin").length;
     const targetMember = workspace.members.find((m) => m.userId === userId);
-    if (targetMember?.role === "Admin" && adminCount <= 1) {
+    if (
+      targetMember?.role === "Admin" &&
+      targetMember.status === "Active" &&
+      activeAdminCount(workspace.members) <= 1
+    ) {
       throw new ApiError(400, "Cannot remove the last Admin from the workspace.");
     }
 
