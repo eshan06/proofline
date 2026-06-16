@@ -356,6 +356,10 @@ export class MemoryRepository implements Repository {
     return this.ws(workspaceId).members.length;
   }
 
+  async listMembers(workspaceId: string): Promise<Member[]> {
+    return this.ws(workspaceId).members;
+  }
+
   async membershipRole(userId: string, workspaceId: string): Promise<MemberRole | null> {
     return this.memberships.find((m) => m.userId === userId && m.workspaceId === workspaceId)?.role ?? null;
   }

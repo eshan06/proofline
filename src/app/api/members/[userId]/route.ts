@@ -19,9 +19,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ userId
 
     // Guard: don't let the workspace lose its last active Admin by demotion.
     if (body.role !== "Admin") {
-      const workspace = await r.getWorkspace(session.workspaceId);
-      const target = workspace.members.find((m) => m.userId === userId);
-      if (target?.role === "Admin" && target.status === "Active" && activeAdminCount(workspace.members) <= 1) {
+      const members = await r.listMembers(session.workspaceId);
+      const target = members.find((m) => m.userId === userId);
+      if (target?.role === "Admin" && target.status === "Active" && activeAdminCount(members) <= 1) {
         throw new ApiError(400, "Cannot demote the last Admin — promote another member to Admin first.");
       }
     }
@@ -52,12 +52,12 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ user
 
     // Guard: do not allow removing the last *active* Admin. Pending (Invited)
     // admins can't manage the workspace yet, so they don't satisfy the invariant.
-    const workspace = await r.getWorkspace(session.workspaceId);
-    const targetMember = workspace.members.find((m) => m.userId === userId);
+    const members = await r.listMembers(session.workspaceId);
+    const targetMember = members.find((m) => m.userId === userId);
     if (
       targetMember?.role === "Admin" &&
       targetMember.status === "Active" &&
-      activeAdminCount(workspace.members) <= 1
+      activeAdminCount(members) <= 1
     ) {
       throw new ApiError(400, "Cannot remove the last Admin from the workspace.");
     }

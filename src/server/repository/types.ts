@@ -148,6 +148,8 @@ export interface Repository {
   setSubscription(workspaceId: string, patch: Partial<SubscriptionState>): Promise<void>;
   /** Active + invited member count, for seat-limit enforcement. */
   countMembers(workspaceId: string): Promise<number>;
+  /** Just the workspace's members — a light query, not the full getWorkspace fan-out. */
+  listMembers(workspaceId: string): Promise<Member[]>;
   /** The user's primary (first) workspace id, or null if they have none. */
   primaryWorkspaceForUser(userId: string): Promise<string | null>;
   /** A fully-seeded throwaway workspace for an unauthenticated demo session. */

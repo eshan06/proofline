@@ -372,6 +372,27 @@ export class PgRepository implements Repository {
     return rows.length;
   }
 
+  async listMembers(workspaceId: string): Promise<Member[]> {
+    // Memberships joined to users in a single batched lookup — the member slice
+    // of getWorkspace without its 8 other queries (tickets/customers/kb/…).
+    const mem = await this.db.select().from(s.memberships).where(eq(s.memberships.workspaceId, workspaceId));
+    const userIds = mem.map((m) => m.userId);
+    const users = userIds.length ? await this.db.select().from(s.users).where(inArray(s.users.id, userIds)) : [];
+    const byId = new Map(users.map((u) => [u.id, u]));
+    return mem.map((m) => {
+      const u = byId.get(m.userId);
+      const name = u?.name ?? m.invitedEmail?.split("@")[0] ?? "Member";
+      return {
+        userId: m.userId,
+        name,
+        email: u?.email ?? m.invitedEmail ?? "",
+        role: m.role as MemberRole,
+        init: name.charAt(0).toUpperCase(),
+        status: m.status as "Active" | "Invited",
+      };
+    });
+  }
+
   async membershipRole(userId: string, workspaceId: string): Promise<MemberRole | null> {
     const [row] = await this.db
       .select()
