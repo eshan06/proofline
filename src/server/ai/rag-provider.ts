@@ -8,12 +8,15 @@ import { llm } from "./llm";
  * retrieval is available). Implements the same DraftProvider interface as the
  * fixture mock, including the refusal contract: when retrieval finds no
  * grounded source above threshold, it returns no draft + a failure reason —
- * the AI never guesses.
+ * the AI never guesses. It also withholds any draft that trips a "never say"
+ * policy (the route passes copilot.neverSay).
  *
- * It also enforces the workspace's Copilot guardrails on the live drafting
- * path: a draft whose confidence is below the configured threshold is held for
- * human review, and a draft that trips a "never say" policy is withheld. (The
- * route passes copilot.threshold/100 and copilot.neverSay.)
+ * The confidence threshold is intentionally NOT a server-side refusal: the
+ * product has no auto-send (a human sends every reply), so a below-threshold
+ * draft is surfaced and flagged "held for review" in the UI rather than hidden,
+ * and the low-confidence automation still fires on it. Refusing here would both
+ * suppress that automation and break the playground's "below your threshold"
+ * affordance, so the threshold gates the *client* display, not the draft.
  *
  * `workspaceId` is bound per request (route handlers know the tenant); a small
  * factory closes over it.
@@ -26,31 +29,13 @@ export class RagDraftProvider implements DraftProvider {
     return firstCustomer?.text ?? ticket.subject;
   }
 
-  /**
-   * Shared retrieval + drafting pass with guardrails.
-   * `gateThreshold` is true for a fresh regenerate (the customer's confidence
-   * bar applies) and false for a tone rewrite of an already-accepted draft
-   * (restyling shouldn't suddenly refuse), but "never say" applies to both.
-   */
-  private async draft(
-    ticket: Ticket,
-    tone: Tone | undefined,
-    opts: DraftProviderOptions,
-    gateThreshold: boolean,
-  ): Promise<DraftResult> {
+  /** Shared retrieval + drafting pass with the "never say" guardrail. */
+  private async draft(ticket: Ticket, tone: Tone | undefined, opts: DraftProviderOptions): Promise<DraftResult> {
     const question = this.customerQuestion(ticket);
     const retrieved = await retrieve(this.workspaceId, question, 4);
     const confidence = scoreConfidence(retrieved);
     if (confidence == null) {
       return { draft: null, failureReason: "No grounded source found for this question — routing to a human." };
-    }
-    if (gateThreshold && confidence < opts.threshold) {
-      return {
-        draft: null,
-        failureReason: `Draft confidence ${Math.round(confidence * 100)}% is below your ${Math.round(
-          opts.threshold * 100,
-        )}% bar — held for human review.`,
-      };
     }
 
     const chunks = filterGrounded(retrieved);
@@ -86,21 +71,23 @@ export class RagDraftProvider implements DraftProvider {
   }
 
   async regenerate(ticket: Ticket, _kb: KbDoc[], opts: DraftProviderOptions): Promise<DraftResult> {
-    return this.draft(ticket, undefined, opts, true);
+    return this.draft(ticket, undefined, opts);
   }
 
   async rewrite(ticket: Ticket, tone: Tone, opts: DraftProviderOptions): Promise<DraftResult> {
-    // Restyle in a new tone. The threshold gate is skipped (the agent already
-    // accepted this grounded ticket); "never say" still applies so a restyle
-    // can't surface a banned phrase.
-    return this.draft(ticket, tone, opts, false);
+    // Restyle in a new tone. "Never say" still applies so a restyle can't
+    // surface a banned phrase.
+    return this.draft(ticket, tone, opts);
   }
 
   async answer(question: string, _kb: KbDoc[], opts: DraftProviderOptions): Promise<PlaygroundResult> {
     const retrieved = await retrieve(this.workspaceId, question, 4);
     const confidence = scoreConfidence(retrieved);
-    if (confidence == null || confidence < opts.threshold) {
-      // No grounded source, or below the confidence bar → the refusal path.
+    if (confidence == null) {
+      // No grounded source → the refusal path (the playground shows it). The
+      // confidence-threshold "held for review" affordance is computed client
+      // side from the returned confidence, so a low-but-grounded answer is
+      // returned normally rather than hidden here.
       return { conf: null, text: "", cites: [] };
     }
     const chunks = filterGrounded(retrieved);

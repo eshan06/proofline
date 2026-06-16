@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, Check, Sparkles } from "lucide-react";
 import { EvidenceCard } from "./evidence-card";
 import { useInboxStore } from "@/stores/inbox";
+import { useWorkspace } from "@/hooks/use-workspace";
 import { toast } from "@/stores/toasts";
 import { api } from "@/lib/api-client";
 import {
@@ -65,8 +66,14 @@ export function CopilotPanel({ ticket, isDemo }: { ticket: Ticket; isDemo: boole
 
   const draftAction = useDraftAction();
   const escalate = useEscalateTicket();
+  const { data: ws } = useWorkspace();
 
   const draft = ticket.draft;
+  // The workspace's confidence threshold (40–95) flags a draft as "held for
+  // review" when its confidence falls below the bar. There is no auto-send, so
+  // this is an advisory flag on a human-sent draft, not a hard block.
+  const threshold = ws?.copilot?.threshold ?? 0;
+  const heldForReview = draft != null && draft.confidence < threshold / 100;
   const regenerating = draftMode === "regen";
   const editing = draftMode === "edit";
   const accepted = draftMode === "accepted";
@@ -156,8 +163,16 @@ export function CopilotPanel({ ticket, isDemo }: { ticket: Ticket; isDemo: boole
               <div className="text-[11px] text-muted">{draft.confMeta}</div>
             </div>
 
-            {/* low-confidence warning */}
-            {isLowConfidence(draft.confidence) ? (
+            {/* held-for-review: below the workspace confidence threshold */}
+            {heldForReview ? (
+              <div className="flex gap-[9px] rounded-[9px] border border-warning/40 bg-warning/[0.08] px-3 py-2.5">
+                <AlertTriangle size={14} strokeWidth={1.4} className="mt-px shrink-0 text-warning" />
+                <span className="text-[11.5px] leading-[1.5] text-warning-soft">
+                  Held for review — {confidencePercent(draft.confidence)} is below your {threshold}% confidence
+                  threshold. Read it over carefully before sending.
+                </span>
+              </div>
+            ) : isLowConfidence(draft.confidence) ? (
               <div className="flex gap-[9px] rounded-[9px] border border-warning/30 bg-warning/[0.06] px-3 py-2.5">
                 <AlertTriangle size={14} strokeWidth={1.4} className="mt-px shrink-0 text-warning" />
                 <span className="text-[11.5px] leading-[1.5] text-warning-soft">

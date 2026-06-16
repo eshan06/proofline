@@ -89,8 +89,8 @@ export function Playground({ threshold, sources }: { threshold: number; sources:
             <div className="flex gap-[9px] rounded-[9px] border border-danger/30 bg-danger/[0.06] px-[13px] py-[11px]">
               <AlertTriangle size={14} strokeWidth={1.4} className="mt-px shrink-0 text-danger" />
               <span className="text-[11.5px] leading-[1.55] text-[#E8C2C2]">
-                No grounded source found — “SSO configuration guide.pdf” failed to index, so the
-                copilot refuses to guess. It would route this ticket to a human.
+                No grounded source found in your knowledge base for this question, so the copilot
+                won’t guess. It would route this ticket to a human.
               </span>
             </div>
           ) : (

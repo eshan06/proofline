@@ -41,25 +41,32 @@ beforeEach(() => {
   draftReply.mockResolvedValue("Hi Dana — here is your grounded answer.");
 });
 
-describe("RagDraftProvider — confidence threshold", () => {
-  it("holds a draft whose confidence is below the workspace bar", async () => {
+describe("RagDraftProvider — confidence (threshold is a client-side flag, not a server refusal)", () => {
+  it("returns a below-threshold draft with its real confidence (held-for-review is decided in the UI)", async () => {
     vi.mocked(scoreConfidence).mockReturnValue(0.6);
     const res = await new RagDraftProvider("ws1").regenerate(ticket, [], { threshold: 0.7, neverSay: [] });
-    expect(res.draft).toBeNull();
-    expect(res.failureReason).toMatch(/below your 70% bar/);
+    expect(res.draft).not.toBeNull();
+    expect(res.draft?.confidence).toBe(0.6);
   });
 
-  it("returns a draft at or above the bar", async () => {
+  it("returns a draft above the bar with its confidence", async () => {
     vi.mocked(scoreConfidence).mockReturnValue(0.85);
     const res = await new RagDraftProvider("ws1").regenerate(ticket, [], { threshold: 0.7, neverSay: [] });
     expect(res.draft?.text).toContain("grounded answer");
     expect(res.draft?.confidence).toBe(0.85);
   });
 
-  it("refuses a playground answer below the bar", async () => {
+  it("refuses only when no grounded source exists", async () => {
+    vi.mocked(scoreConfidence).mockReturnValue(null);
+    const res = await new RagDraftProvider("ws1").regenerate(ticket, [], { threshold: 0.5, neverSay: [] });
+    expect(res.draft).toBeNull();
+    expect(res.failureReason).toMatch(/No grounded source/);
+  });
+
+  it("playground returns a low-but-grounded answer with its real confidence", async () => {
     vi.mocked(scoreConfidence).mockReturnValue(0.5);
     const res = await new RagDraftProvider("ws1").answer("refund?", [], { threshold: 0.8, neverSay: [] });
-    expect(res.conf).toBeNull();
+    expect(res.conf).toBe(0.5);
   });
 });
 
