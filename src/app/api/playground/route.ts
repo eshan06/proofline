@@ -7,9 +7,12 @@ import { repo } from "@/server/repository";
 
 export async function POST(req: Request) {
   return handleApi(async () => {
-    await enforceRateLimit(req, "ai", LIMITS.ai);
+    // Authorize before consuming the AI rate-limit budget, so a denied caller
+    // (e.g. a read-only Viewer) doesn't burn the shared bucket. Matches the
+    // draft route's ordering.
     const session = await requireSession();
     await requireRole(session, ["Admin", "Agent"]);
+    await enforceRateLimit(req, "ai", LIMITS.ai);
     const body = await parseBody(req, playgroundRequestSchema);
     const r = repo();
     if (!(await r.consumeAiCall(session.id))) {

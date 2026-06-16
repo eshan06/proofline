@@ -73,6 +73,19 @@ describe("requireRole — advertised permission matrix", () => {
     await expect(requireRole(demo, ["Admin"])).resolves.toBeUndefined();
     await expect(requireRole(demo, ["Admin", "Agent"])).resolves.toBeUndefined();
   });
+
+  it("an existing user who accepts an invite gets a working membership (regression)", async () => {
+    // Before the fix, acceptInvite only created a membership for brand-new
+    // users, so an existing account accepting an invite had no membership — and
+    // the new RBAC gates would 403 them despite the UI showing them Active.
+    const r = repo();
+    const email = `existing_${Date.now()}@example.com`;
+    await r.createUserWithWorkspace({ email, name: "Eve Existing", passwordHash: "x" });
+    const accepted = await r.acceptInvite({ workspaceId, email, role: "Agent" });
+    const sess = session(accepted.userId, workspaceId);
+    await expect(requireRole(sess, ["Admin", "Agent"])).resolves.toBeUndefined();
+    await expect(requireRole(sess, ["Admin"])).rejects.toMatchObject({ status: 403 });
+  });
 });
 
 /**

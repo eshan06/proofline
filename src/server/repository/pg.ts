@@ -206,9 +206,11 @@ export class PgRepository implements Repository {
     //    session, all within the TTL window). The delete cascades to every child
     //    row, including kb_chunks (the pgvector embeddings).
     const cutoff = new Date(Date.now() - DEMO_TTL_MS);
-    const orphans = await this.db
-      .select({ id: s.workspaces.id })
-      .from(s.workspaces)
+    // Single DELETE … RETURNING with correlated NOT EXISTS subqueries — no id
+    // parameter list, so it can't hit Postgres's 65535-bound-parameter limit
+    // even after a long stretch without cleanup.
+    const deletedWorkspaces = await this.db
+      .delete(s.workspaces)
       .where(
         and(
           lt(s.workspaces.createdAt, cutoff),
@@ -225,16 +227,9 @@ export class PgRepository implements Repository {
               .where(and(eq(s.sessions.workspaceId, s.workspaces.id), gt(s.sessions.expiresAt, now))),
           ),
         ),
-      );
-    if (orphans.length) {
-      await this.db.delete(s.workspaces).where(
-        inArray(
-          s.workspaces.id,
-          orphans.map((o) => o.id),
-        ),
-      );
-    }
-    return { sessionsDeleted: deletedSessions.length, demoWorkspacesDeleted: orphans.length };
+      )
+      .returning({ id: s.workspaces.id });
+    return { sessionsDeleted: deletedSessions.length, demoWorkspacesDeleted: deletedWorkspaces.length };
   }
 
   async consumeAiCall(sessionId: string): Promise<boolean> {

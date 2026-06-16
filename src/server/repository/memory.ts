@@ -598,8 +598,16 @@ export class MemoryRepository implements Repository {
         emailVerified: true,
       };
       this.users.set(normalizedEmail, userRec);
-      this.memberships.push({ userId: userRec.id, workspaceId: input.workspaceId, role: input.role as MemberRole });
     }
+    // Ensure an active membership exists — mirror the PG update-or-insert. This
+    // must run for EXISTING users too: otherwise a user who already had an
+    // account and accepts an invite would have no membership, and role-gated
+    // routes (requireRole) would 403 them despite showing as Active.
+    const existing = this.memberships.find(
+      (m) => m.userId === userRec!.id && m.workspaceId === input.workspaceId,
+    );
+    if (existing) existing.role = input.role as MemberRole;
+    else this.memberships.push({ userId: userRec.id, workspaceId: input.workspaceId, role: input.role as MemberRole });
     return { userId: userRec.id };
   }
 
