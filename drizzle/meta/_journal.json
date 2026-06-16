@@ -43,6 +43,13 @@
       "when": 1781416261431,
       "tag": "0005_slack_channel",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781576952434,
+      "tag": "0006_perf_indexes",
+      "breakpoints": true
     }
   ]
 }

@@ -54,7 +54,12 @@ export const workspaces = pgTable("workspaces", {
   slackTeamName: text("slack_team_name"),
   slackBotToken: text("slack_bot_token"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  // Per-inbound-webhook tenant lookups (resolve a workspace by its connected
+  // mailbox / Slack team) would otherwise seq-scan the workspaces table.
+  index("workspaces_gmail_address_idx").on(t.gmailAddress),
+  index("workspaces_slack_team_idx").on(t.slackTeamId),
+]);
 
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
@@ -75,7 +80,12 @@ export const memberships = pgTable(
     invitedEmail: text("invited_email"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.userId, t.workspaceId] })],
+  (t) => [
+    primaryKey({ columns: [t.userId, t.workspaceId] }),
+    // The composite PK is ordered by userId, so workspace-scoped membership
+    // queries (and the demo-cleanup NOT EXISTS subquery) need their own index.
+    index("memberships_ws_idx").on(t.workspaceId),
+  ],
 );
 
 export const sessions = pgTable(
