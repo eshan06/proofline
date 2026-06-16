@@ -69,7 +69,7 @@ export class PgRepository implements Repository {
   private async seedWorkspaceRows(exec: Executor, workspaceId: string, name: string, empty = false): Promise<void> {
     const d = seedWorkspaceData(name, { empty });
     const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workspace"}-${workspaceId.slice(-6)}`;
-    await exec.insert(s.workspaces).values({ id: workspaceId, name: d.name, slug, plan: "Growth", widgetSiteKey: secureToken(16) });
+    await exec.insert(s.workspaces).values({ id: workspaceId, name: d.name, slug, plan: d.subscription.plan, seats: d.subscription.seats, widgetSiteKey: secureToken(16) });
     await exec.insert(s.copilotSettings).values({
       workspaceId,
       tone: d.copilot.tone,

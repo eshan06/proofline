@@ -73,6 +73,9 @@ export function seedWorkspaceData(name = "Acme Inc", opts: { empty?: boolean } =
   if (opts.empty) {
     return {
       ...base,
+      // Real signups start on Free (upgrade via Stripe checkout) — not the paid
+      // Growth tier. The demo workspace keeps Growth to showcase the product.
+      subscription: { ...base.subscription, plan: "Free", seats: 2 },
       tickets: [],
       customers: [],
       kbDocs: [],
