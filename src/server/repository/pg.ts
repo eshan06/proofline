@@ -31,6 +31,8 @@ import type { InboundEmail } from "@/server/email/gmail";
 import type { InboundSlackMessage, SlackAccount } from "@/server/slack/slack";
 import {
   NotFoundError,
+  SeatLimitError,
+  LastAdminError,
   type ChannelIngestResult,
   type EmailThreadRef,
   type GmailAccount,
@@ -42,9 +44,21 @@ import {
   type UserRecord,
 } from "./types";
 
+/** Today's date as YYYY-MM-DD (UTC), for the per-workspace AI usage counter key. */
+function utcDay(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Count active Admins in a membership row set (excludes Invited). */
+function countActiveAdmins(rows: { role: string; status: string }[]): number {
+  return rows.filter((m) => m.role === "Admin" && m.status === "Active").length;
+}
+
 const DEMO_TTL_MS = 30 * 60 * 1000;
 const REGULAR_TTL_MS = 12 * 60 * 60 * 1000;
 export const DEMO_AI_CALL_LIMIT = Number(process.env.DEMO_AI_CALL_LIMIT) || 25;
+/** Max messages per widget conversation, bounding per-row growth / abuse. */
+export const WIDGET_MAX_MESSAGES = Number(process.env.WIDGET_MAX_MESSAGES) || 200;
 
 const emptySteps = (): Record<DemoStep, boolean> => ({
   draft: false, send: false, upload: false, connect: false, palette: false,
@@ -229,6 +243,19 @@ export class PgRepository implements Repository {
         ),
       )
       .returning({ id: s.workspaces.id });
+
+    // 3. Prune bounded-but-growing ledgers: processed Stripe event ids (kept long
+    //    enough to dedup any realistic redelivery window) and old daily AI-usage
+    //    counters. Best-effort — failures here must not fail the whole job.
+    try {
+      const eventCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      await this.db.delete(s.stripeEvents).where(lt(s.stripeEvents.createdAt, eventCutoff));
+      const usageCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      await this.db.delete(s.aiUsage).where(lt(s.aiUsage.day, usageCutoff));
+    } catch (err) {
+      logger.warn("cleanup.ledger_prune_failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+
     return { sessionsDeleted: deletedSessions.length, demoWorkspacesDeleted: deletedWorkspaces.length };
   }
 
@@ -290,9 +317,10 @@ export class PgRepository implements Repository {
     return token;
   }
   async consumePasswordReset(token: string): Promise<string | null> {
-    const [row] = await this.db.select().from(s.passwordResets).where(eq(s.passwordResets.token, token)).limit(1);
+    // Atomic single-use: DELETE … RETURNING means only ONE concurrent caller gets
+    // the row back, closing the select-then-delete double-use race.
+    const [row] = await this.db.delete(s.passwordResets).where(eq(s.passwordResets.token, token)).returning();
     if (!row) return null;
-    await this.db.delete(s.passwordResets).where(eq(s.passwordResets.token, token));
     return row.expiresAt.getTime() < Date.now() ? null : row.userId;
   }
   async setPassword(userId: string, passwordHash: string): Promise<void> {
@@ -350,6 +378,7 @@ export class PgRepository implements Repository {
       currentPeriodEnd: row.currentPeriodEnd,
       stripeCustomerId: row.stripeCustomerId,
       stripeSubscriptionId: row.stripeSubscriptionId,
+      eventAt: row.subscriptionEventAt,
     };
   }
 
@@ -361,10 +390,53 @@ export class PgRepository implements Repository {
         ...(patch.status !== undefined && { subscriptionStatus: patch.status }),
         ...(patch.seats !== undefined && { seats: patch.seats }),
         ...(patch.currentPeriodEnd !== undefined && { currentPeriodEnd: patch.currentPeriodEnd }),
+        ...(patch.eventAt !== undefined && { subscriptionEventAt: patch.eventAt }),
         ...(patch.stripeCustomerId !== undefined && { stripeCustomerId: patch.stripeCustomerId }),
         ...(patch.stripeSubscriptionId !== undefined && { stripeSubscriptionId: patch.stripeSubscriptionId }),
       })
       .where(eq(s.workspaces.id, workspaceId));
+  }
+
+  async markStripeEventProcessed(eventId: string, type: string): Promise<boolean> {
+    // Insert the event id; the PK conflict on a redelivery means "already seen".
+    const inserted = await this.db
+      .insert(s.stripeEvents)
+      .values({ id: eventId, type })
+      .onConflictDoNothing()
+      .returning({ id: s.stripeEvents.id });
+    return inserted.length > 0;
+  }
+
+  async unmarkStripeEventProcessed(eventId: string): Promise<void> {
+    await this.db.delete(s.stripeEvents).where(eq(s.stripeEvents.id, eventId));
+  }
+
+  async findWorkspaceByStripeIds(ids: { customerId?: string | null; subscriptionId?: string | null }): Promise<string | null> {
+    const clauses = [
+      ids.subscriptionId ? eq(s.workspaces.stripeSubscriptionId, ids.subscriptionId) : undefined,
+      ids.customerId ? eq(s.workspaces.stripeCustomerId, ids.customerId) : undefined,
+    ].filter(Boolean) as ReturnType<typeof eq>[];
+    if (!clauses.length) return null;
+    const [row] = await this.db.select({ id: s.workspaces.id }).from(s.workspaces).where(or(...clauses)).limit(1);
+    return row?.id ?? null;
+  }
+
+  async consumeWorkspaceAiCall(workspaceId: string, dailyLimit: number): Promise<boolean> {
+    const day = utcDay();
+    // Atomic upsert: insert today's row at 1, or increment only if still under the
+    // limit. The conditional WHERE on the conflict update means a row that has hit
+    // the cap is not updated, and `returning` is empty → denied. One round-trip,
+    // no select-then-update race.
+    const updated = await this.db
+      .insert(s.aiUsage)
+      .values({ workspaceId, day, calls: 1 })
+      .onConflictDoUpdate({
+        target: [s.aiUsage.workspaceId, s.aiUsage.day],
+        set: { calls: sql`${s.aiUsage.calls} + 1` },
+        setWhere: lt(s.aiUsage.calls, dailyLimit),
+      })
+      .returning({ calls: s.aiUsage.calls });
+    return updated.length > 0;
   }
 
   async countMembers(workspaceId: string): Promise<number> {
@@ -397,7 +469,9 @@ export class PgRepository implements Repository {
     const [row] = await this.db
       .select()
       .from(s.memberships)
-      .where(and(eq(s.memberships.userId, userId), eq(s.memberships.workspaceId, workspaceId)))
+      // Only ACTIVE memberships authorize: an Invited (not-yet-accepted) member
+      // must not pass any RBAC gate even though their row already carries a role.
+      .where(and(eq(s.memberships.userId, userId), eq(s.memberships.workspaceId, workspaceId), eq(s.memberships.status, "Active")))
       .limit(1);
     return (row?.role as MemberRole | undefined) ?? null;
   }
@@ -677,6 +751,16 @@ export class PgRepository implements Repository {
     return { id: stripPrefix(row.id, workspaceId), name: row.name, source: row.source, status: row.status as KbDoc["status"], chunks: row.chunks, cited: row.cited, synced: row.synced };
   }
 
+  async deleteKbDoc(workspaceId: string, id: string): Promise<void> {
+    const fullId = id.startsWith(workspaceId) ? id : `${workspaceId}_${id}`;
+    // FK kb_chunks.docId → kb_docs.id ON DELETE CASCADE drops this doc's embeddings.
+    const deleted = await this.db
+      .delete(s.kbDocs)
+      .where(and(eq(s.kbDocs.workspaceId, workspaceId), eq(s.kbDocs.id, fullId)))
+      .returning({ id: s.kbDocs.id });
+    if (!deleted.length) throw new NotFoundError(`Unknown document ${id}`);
+  }
+
   /* automations ---------------------------------------------------------- */
 
   async addAutomation(workspaceId: string, rule: { trigger: string; conds: string[]; acts: string[] }): Promise<Automation> {
@@ -719,52 +803,92 @@ export class PgRepository implements Repository {
     return { name: local.charAt(0).toUpperCase() + local.slice(1), email, role, init: local.charAt(0).toUpperCase(), status: "Invited" };
   }
 
-  async acceptInvite(input: { workspaceId: string; email: string; role: string; name?: string; passwordHash?: string }): Promise<{ userId: string }> {
+  async inviteMemberGuarded(workspaceId: string, email: string, role: MemberRole, seatLimit: number): Promise<Member> {
+    return this.db.transaction(async (tx) => {
+      // Lock the workspace row to serialize concurrent invites/accepts so the
+      // seat count can't be outrun between the check and the insert.
+      const [ws] = await tx.select({ id: s.workspaces.id }).from(s.workspaces).where(eq(s.workspaces.id, workspaceId)).for("update").limit(1);
+      if (!ws) throw new NotFoundError(`Unknown workspace ${workspaceId}`);
+      const used = await tx.select({ userId: s.memberships.userId }).from(s.memberships).where(eq(s.memberships.workspaceId, workspaceId));
+      if (used.length >= seatLimit) throw new SeatLimitError(`This workspace's plan includes ${seatLimit} seats.`);
+      const local = email.split("@")[0] ?? "teammate";
+      const userId = `u_${uid("u")}`;
+      await tx.insert(s.users).values({ id: userId, email: email.toLowerCase(), name: local.charAt(0).toUpperCase() + local.slice(1) }).onConflictDoNothing();
+      await tx.insert(s.memberships).values({ userId, workspaceId, role, status: "Invited", invitedEmail: email }).onConflictDoNothing();
+      return { name: local.charAt(0).toUpperCase() + local.slice(1), email, role, init: local.charAt(0).toUpperCase(), status: "Invited" as const };
+    });
+  }
+
+  async acceptInvite(input: { workspaceId: string; email: string; role: string; name?: string; passwordHash?: string; seatLimit?: number }): Promise<{ userId: string }> {
     const normalizedEmail = input.email.toLowerCase();
+    const strict = input.seatLimit !== undefined;
 
-    // Find the placeholder user created at invite time (matched by email).
-    const [existingUser] = await this.db.select().from(s.users).where(eq(s.users.email, normalizedEmail)).limit(1);
+    // All writes in one transaction so a crash can't leave the user updated but
+    // the membership not activated (or vice-versa). In strict mode the workspace
+    // row is locked first so the seat re-check is race-free.
+    return this.db.transaction(async (tx) => {
+      if (strict) {
+        const [ws] = await tx.select({ id: s.workspaces.id }).from(s.workspaces).where(eq(s.workspaces.id, input.workspaceId)).for("update").limit(1);
+        if (!ws) throw new NotFoundError(`Unknown workspace ${input.workspaceId}`);
+      }
 
-    let userId: string;
-    if (existingUser) {
-      userId = existingUser.id;
-      // Update the account with a real name and/or password if provided.
-      // Clicking an invite link proves ownership of the email address.
-      const updates: Record<string, unknown> = { emailVerified: true };
-      if (input.name) updates.name = input.name;
-      if (input.passwordHash) updates.passwordHash = input.passwordHash;
-      await this.db.update(s.users).set(updates).where(eq(s.users.id, userId));
-    } else {
-      // No placeholder user — create a full account now.
-      const local = normalizedEmail.split("@")[0] ?? "teammate";
-      userId = `u_${uid("u")}`;
-      await this.db.insert(s.users).values({
-        id: userId,
-        email: normalizedEmail,
-        name: input.name ?? (local.charAt(0).toUpperCase() + local.slice(1)),
-        passwordHash: input.passwordHash ?? null,
-        emailVerified: true,
-      });
-    }
+      // Find the placeholder user created at invite time (matched by email).
+      const [existingUser] = await tx.select().from(s.users).where(eq(s.users.email, normalizedEmail)).limit(1);
 
-    // Activate the membership (created by inviteMember) or insert one if missing.
-    const updatedRows = await this.db
-      .update(s.memberships)
-      .set({ status: "Active" })
-      .where(and(eq(s.memberships.workspaceId, input.workspaceId), eq(s.memberships.userId, userId)))
-      .returning({ userId: s.memberships.userId });
+      let userId: string;
+      if (existingUser) {
+        userId = existingUser.id;
+        const updates: Record<string, unknown> = { emailVerified: true };
+        if (input.name) updates.name = input.name;
+        if (input.passwordHash) updates.passwordHash = input.passwordHash;
+        await tx.update(s.users).set(updates).where(eq(s.users.id, userId));
+      } else {
+        const local = normalizedEmail.split("@")[0] ?? "teammate";
+        userId = `u_${uid("u")}`;
+        await tx.insert(s.users).values({
+          id: userId,
+          email: normalizedEmail,
+          name: input.name ?? (local.charAt(0).toUpperCase() + local.slice(1)),
+          passwordHash: input.passwordHash ?? null,
+          emailVerified: true,
+        });
+      }
 
-    if (!updatedRows.length) {
-      await this.db.insert(s.memberships).values({
-        userId,
-        workspaceId: input.workspaceId,
-        role: input.role as MemberRole,
-        status: "Active",
-        invitedEmail: normalizedEmail,
-      });
-    }
+      const [membership] = await tx
+        .select()
+        .from(s.memberships)
+        .where(and(eq(s.memberships.workspaceId, input.workspaceId), eq(s.memberships.userId, userId)))
+        .limit(1);
 
-    return { userId };
+      if (strict) {
+        // Single-use: a valid acceptance requires a still-pending Invited
+        // membership. A missing row (revoked / forged token) or one already Active
+        // (token replayed after acceptance) is rejected — the 7-day-valid token
+        // can't re-create a membership an admin removed.
+        if (!membership || membership.status !== "Invited") {
+          throw new NotFoundError("This invite is no longer valid — it may have already been used or been revoked.");
+        }
+        // Race-free seat re-check under the workspace lock.
+        const active = await tx.select({ userId: s.memberships.userId }).from(s.memberships).where(and(eq(s.memberships.workspaceId, input.workspaceId), eq(s.memberships.status, "Active")));
+        if (active.length >= input.seatLimit!) {
+          throw new SeatLimitError("This workspace is at its seat limit — ask an admin to upgrade the plan before joining.");
+        }
+      }
+
+      if (membership) {
+        await tx.update(s.memberships).set({ status: "Active" }).where(and(eq(s.memberships.workspaceId, input.workspaceId), eq(s.memberships.userId, userId)));
+      } else {
+        await tx.insert(s.memberships).values({
+          userId,
+          workspaceId: input.workspaceId,
+          role: input.role as MemberRole,
+          status: "Active",
+          invitedEmail: normalizedEmail,
+        });
+      }
+
+      return { userId };
+    });
   }
 
   async updateMemberRole(workspaceId: string, userId: string, role: MemberRole): Promise<Member> {
@@ -789,6 +913,48 @@ export class PgRepository implements Repository {
     if (!deleted.length) throw new NotFoundError(`No membership for user ${userId} in this workspace`);
   }
 
+  /**
+   * Lock all of a workspace's membership rows FOR UPDATE so the last-active-Admin
+   * invariant can be checked and a role/removal applied atomically — closing the
+   * TOCTOU where two concurrent demotions/removals both see ≥2 admins and both
+   * commit, orphaning the workspace.
+   */
+  private async withMembershipLock<T>(workspaceId: string, fn: (tx: Executor, rows: { userId: string; role: string; status: string }[]) => Promise<T>): Promise<T> {
+    return this.db.transaction(async (tx) => {
+      const rows = await tx
+        .select({ userId: s.memberships.userId, role: s.memberships.role, status: s.memberships.status })
+        .from(s.memberships)
+        .where(eq(s.memberships.workspaceId, workspaceId))
+        .for("update");
+      return fn(tx, rows);
+    });
+  }
+
+  async updateMemberRoleGuarded(workspaceId: string, userId: string, role: MemberRole): Promise<Member> {
+    await this.withMembershipLock(workspaceId, async (tx, rows) => {
+      const target = rows.find((m) => m.userId === userId);
+      if (!target) throw new NotFoundError(`No membership for user ${userId} in this workspace`);
+      if (role !== "Admin" && target.role === "Admin" && target.status === "Active" && countActiveAdmins(rows) <= 1) {
+        throw new LastAdminError("Cannot demote the last Admin — promote another member to Admin first.");
+      }
+      await tx.update(s.memberships).set({ role }).where(and(eq(s.memberships.workspaceId, workspaceId), eq(s.memberships.userId, userId)));
+    });
+    return this.updateMemberRole(workspaceId, userId, role);
+  }
+
+  async removeMemberGuarded(workspaceId: string, userId: string): Promise<{ name: string }> {
+    return this.withMembershipLock(workspaceId, async (tx, rows) => {
+      const target = rows.find((m) => m.userId === userId);
+      if (!target) throw new NotFoundError(`No membership for user ${userId} in this workspace`);
+      if (target.role === "Admin" && target.status === "Active" && countActiveAdmins(rows) <= 1) {
+        throw new LastAdminError("Cannot remove the last Admin from the workspace.");
+      }
+      const [user] = await tx.select({ name: s.users.name }).from(s.users).where(eq(s.users.id, userId)).limit(1);
+      await tx.delete(s.memberships).where(and(eq(s.memberships.workspaceId, workspaceId), eq(s.memberships.userId, userId)));
+      return { name: user?.name ?? userId };
+    });
+  }
+
   async patchCopilot(workspaceId: string, patch: Partial<CopilotSettings>): Promise<CopilotSettings> {
     await this.db.update(s.copilotSettings).set({
       ...(patch.tone && { tone: patch.tone }),
@@ -802,6 +968,23 @@ export class PgRepository implements Repository {
 
   async appendAudit(workspaceId: string, event: { user: string; action: string; type: AuditEvent["type"] }): Promise<void> {
     await this.db.insert(s.auditEvents).values({ id: uid("au"), workspaceId, time: "just now", user: event.user, action: event.action, type: event.type });
+  }
+
+  async exportChannelData(workspaceId: string): Promise<{
+    widgetConversations: { ticketId: string; visitorName: string | null; visitorEmail: string | null; createdAt?: string }[];
+    emailThreads: { ticketId: string; customerEmail: string; gmailThreadId: string }[];
+    slackThreads: { ticketId: string; channel: string; threadTs: string }[];
+  }> {
+    const [convos, emails, slacks] = await Promise.all([
+      this.db.select().from(s.widgetConversations).where(eq(s.widgetConversations.workspaceId, workspaceId)),
+      this.db.select().from(s.emailThreads).where(eq(s.emailThreads.workspaceId, workspaceId)),
+      this.db.select().from(s.slackThreads).where(eq(s.slackThreads.workspaceId, workspaceId)),
+    ]);
+    return {
+      widgetConversations: convos.map((c) => ({ ticketId: stripPrefix(c.ticketId, workspaceId), visitorName: c.visitorName, visitorEmail: c.visitorEmail, createdAt: c.createdAt?.toISOString() })),
+      emailThreads: emails.map((e) => ({ ticketId: stripPrefix(e.ticketId, workspaceId), customerEmail: e.customerEmail, gmailThreadId: e.gmailThreadId })),
+      slackThreads: slacks.map((t) => ({ ticketId: stripPrefix(t.ticketId, workspaceId), channel: t.channel, threadTs: t.threadTs })),
+    };
   }
 
   /* website chat widget -------------------------------------------------- */
@@ -860,22 +1043,25 @@ export class PgRepository implements Repository {
     return conv;
   }
 
-  async appendWidgetMessage(workspaceId: string, token: string, text: string): Promise<boolean> {
+  async appendWidgetMessage(workspaceId: string, token: string, text: string): Promise<"ok" | "unknown" | "limit"> {
     const conv = await this.loadConvo(workspaceId, token);
-    if (!conv) return false;
+    if (!conv) return "unknown";
     const [row] = await this.db
       .select()
       .from(s.tickets)
       .where(and(eq(s.tickets.workspaceId, workspaceId), eq(s.tickets.id, conv.ticketId)))
       .limit(1);
-    if (!row) return false;
+    if (!row) return "unknown";
     const t = rowToTicket(row);
+    // Cap per-conversation messages: each append rewrites the whole messages
+    // jsonb, so unbounded growth is O(n²) write/memory amplification on one row.
+    if (t.messages.length >= WIDGET_MAX_MESSAGES) return "limit";
     t.messages.push({ id: uid("m"), kind: "customer", author: conv.visitorName ?? t.customer.name, time: "just now", text });
     t.status = "open";
     t.stage = "new";
     t.unread = true;
     await this.saveTicket(workspaceId, t);
-    return true;
+    return "ok";
   }
 
   async getWidgetTranscript(workspaceId: string, token: string): Promise<WidgetTranscriptMessage[] | null> {

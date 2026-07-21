@@ -26,6 +26,8 @@ import type { InboundEmail } from "@/server/email/gmail";
 import type { InboundSlackMessage, SlackAccount } from "@/server/slack/slack";
 import {
   NotFoundError,
+  SeatLimitError,
+  LastAdminError,
   type ChannelIngestResult,
   type EmailThreadRef,
   type GmailAccount,
@@ -40,6 +42,8 @@ import {
 const DEMO_TTL_MS = 30 * 60 * 1000;
 const REGULAR_TTL_MS = 12 * 60 * 60 * 1000;
 export const DEMO_AI_CALL_LIMIT = Number(process.env.DEMO_AI_CALL_LIMIT) || 25;
+/** Max messages per widget conversation, bounding per-row growth / abuse. */
+export const WIDGET_MAX_MESSAGES = Number(process.env.WIDGET_MAX_MESSAGES) || 200;
 
 interface MemSession extends SessionInfo {
   lastSeen: number;
@@ -88,6 +92,10 @@ export class MemoryRepository implements Repository {
   private slackAccounts: Map<string, SlackAccount>;
   /** Keyed by `${workspaceId}:${channel}:${threadTs}`. */
   private slackThreads: Map<string, SlackThreadRec>;
+  /** Processed Stripe event ids (webhook idempotency). */
+  private stripeEvents: Set<string>;
+  /** Per-workspace per-day AI-call counts, keyed by `${workspaceId}:${day}`. */
+  private aiUsage: Map<string, number>;
 
   constructor() {
     const g = globalThis as unknown as {
@@ -102,16 +110,20 @@ export class MemoryRepository implements Repository {
         emailThreads: Map<string, EmailThreadRec>;
         slackAccounts: Map<string, SlackAccount>;
         slackThreads: Map<string, SlackThreadRec>;
+        stripeEvents: Set<string>;
+        aiUsage: Map<string, number>;
       };
     };
     if (!g.__plMem) {
-      g.__plMem = { sessions: new Map(), workspaces: new Map(), users: new Map(), memberships: [], widgetConvos: new Map(), authTokens: new Map(), gmailAccounts: new Map(), emailThreads: new Map(), slackAccounts: new Map(), slackThreads: new Map() };
+      g.__plMem = { sessions: new Map(), workspaces: new Map(), users: new Map(), memberships: [], widgetConvos: new Map(), authTokens: new Map(), gmailAccounts: new Map(), emailThreads: new Map(), slackAccounts: new Map(), slackThreads: new Map(), stripeEvents: new Set(), aiUsage: new Map() };
     }
     // Backfill maps added after a long-running process first created __plMem.
     g.__plMem.gmailAccounts ??= new Map();
     g.__plMem.emailThreads ??= new Map();
     g.__plMem.slackAccounts ??= new Map();
     g.__plMem.slackThreads ??= new Map();
+    g.__plMem.stripeEvents ??= new Set();
+    g.__plMem.aiUsage ??= new Map();
     this.sessions = g.__plMem.sessions;
     this.workspaces = g.__plMem.workspaces;
     this.users = g.__plMem.users;
@@ -122,6 +134,8 @@ export class MemoryRepository implements Repository {
     this.emailThreads = g.__plMem.emailThreads;
     this.slackAccounts = g.__plMem.slackAccounts;
     this.slackThreads = g.__plMem.slackThreads;
+    this.stripeEvents = g.__plMem.stripeEvents;
+    this.aiUsage = g.__plMem.aiUsage;
   }
 
   private ws(workspaceId: string): WorkspaceData {
@@ -352,6 +366,29 @@ export class MemoryRepository implements Repository {
     const d = this.ws(workspaceId);
     d.subscription = { ...d.subscription, ...patch };
   }
+  async markStripeEventProcessed(eventId: string, _type: string): Promise<boolean> {
+    if (this.stripeEvents.has(eventId)) return false;
+    this.stripeEvents.add(eventId);
+    return true;
+  }
+  async unmarkStripeEventProcessed(eventId: string): Promise<void> {
+    this.stripeEvents.delete(eventId);
+  }
+  async findWorkspaceByStripeIds(ids: { customerId?: string | null; subscriptionId?: string | null }): Promise<string | null> {
+    for (const [wsId, d] of this.workspaces) {
+      const sub = d.subscription;
+      if (ids.subscriptionId && sub.stripeSubscriptionId === ids.subscriptionId) return wsId;
+      if (ids.customerId && sub.stripeCustomerId === ids.customerId) return wsId;
+    }
+    return null;
+  }
+  async consumeWorkspaceAiCall(workspaceId: string, dailyLimit: number): Promise<boolean> {
+    const key = `${workspaceId}:${new Date().toISOString().slice(0, 10)}`;
+    const used = this.aiUsage.get(key) ?? 0;
+    if (used >= dailyLimit) return false;
+    this.aiUsage.set(key, used + 1);
+    return true;
+  }
   async countMembers(workspaceId: string): Promise<number> {
     return this.ws(workspaceId).members.length;
   }
@@ -522,6 +559,13 @@ export class MemoryRepository implements Repository {
     return doc;
   }
 
+  async deleteKbDoc(workspaceId: string, id: string): Promise<void> {
+    const docs = this.ws(workspaceId).kbDocs;
+    const idx = docs.findIndex((d) => d.id === id);
+    if (idx === -1) throw new NotFoundError(`Unknown document ${id}`);
+    docs.splice(idx, 1);
+  }
+
   /* automations ---------------------------------------------------------- */
 
   async addAutomation(workspaceId: string, rule: { trigger: string; conds: string[]; acts: string[] }): Promise<Automation> {
@@ -577,11 +621,36 @@ export class MemoryRepository implements Repository {
     return member;
   }
 
-  async acceptInvite(input: { workspaceId: string; email: string; role: string; name?: string; passwordHash?: string }): Promise<{ userId: string }> {
+  async inviteMemberGuarded(workspaceId: string, email: string, role: MemberRole, seatLimit: number): Promise<Member> {
+    if (this.ws(workspaceId).members.length >= seatLimit) {
+      throw new SeatLimitError(`This workspace's plan includes ${seatLimit} seats.`);
+    }
+    return this.inviteMember(workspaceId, email, role);
+  }
+
+  private activeAdmins(workspaceId: string): number {
+    // this.memberships is the role source of truth (accepted members only —
+    // invites live in ws.members until accepted), so it represents active admins.
+    return this.memberships.filter((m) => m.workspaceId === workspaceId && m.role === "Admin").length;
+  }
+
+  async acceptInvite(input: { workspaceId: string; email: string; role: string; name?: string; passwordHash?: string; seatLimit?: number }): Promise<{ userId: string }> {
     const normalizedEmail = input.email.toLowerCase();
+    const strict = input.seatLimit !== undefined;
     // Activate the invited member entry in the workspace list.
     const ws = this.ws(input.workspaceId);
     const memberEntry = ws.members.find((m) => m.email.toLowerCase() === normalizedEmail);
+    if (strict) {
+      // Single-use: require a still-pending Invited membership; reject a replayed
+      // (already Active) or revoked/forged (missing) token.
+      if (!memberEntry || memberEntry.status !== "Invited") {
+        throw new NotFoundError("This invite is no longer valid — it may have already been used or been revoked.");
+      }
+      const activeCount = ws.members.filter((m) => m.status === "Active").length;
+      if (activeCount >= input.seatLimit!) {
+        throw new SeatLimitError("This workspace is at its seat limit — ask an admin to upgrade the plan before joining.");
+      }
+    }
     if (memberEntry) {
       if (input.name) memberEntry.name = input.name;
       memberEntry.status = "Active";
@@ -651,6 +720,28 @@ export class MemoryRepository implements Repository {
     }
   }
 
+  // The in-memory backend is single-threaded, so the count+write is naturally
+  // atomic; these mirror the PG guarded methods' last-admin invariant + errors.
+  async updateMemberRoleGuarded(workspaceId: string, userId: string, role: MemberRole): Promise<Member> {
+    const memEntry = this.memberships.find((m) => m.userId === userId && m.workspaceId === workspaceId);
+    if (!memEntry) throw new NotFoundError(`No membership for user ${userId} in this workspace`);
+    if (role !== "Admin" && memEntry.role === "Admin" && this.activeAdmins(workspaceId) <= 1) {
+      throw new LastAdminError("Cannot demote the last Admin — promote another member to Admin first.");
+    }
+    return this.updateMemberRole(workspaceId, userId, role);
+  }
+
+  async removeMemberGuarded(workspaceId: string, userId: string): Promise<{ name: string }> {
+    const memEntry = this.memberships.find((m) => m.userId === userId && m.workspaceId === workspaceId);
+    if (!memEntry) throw new NotFoundError(`No membership for user ${userId} in this workspace`);
+    if (memEntry.role === "Admin" && this.activeAdmins(workspaceId) <= 1) {
+      throw new LastAdminError("Cannot remove the last Admin from the workspace.");
+    }
+    const u = [...this.users.values()].find((u) => u.id === userId);
+    await this.removeMember(workspaceId, userId);
+    return { name: u?.name ?? userId };
+  }
+
   async patchCopilot(workspaceId: string, patch: Partial<CopilotSettings>): Promise<CopilotSettings> {
     const d = this.ws(workspaceId);
     d.copilot = { ...d.copilot, ...patch };
@@ -659,6 +750,23 @@ export class MemoryRepository implements Repository {
 
   async appendAudit(workspaceId: string, event: { user: string; action: string; type: AuditEvent["type"] }): Promise<void> {
     this.ws(workspaceId).audit.unshift({ time: "just now", user: event.user, action: event.action, type: event.type });
+  }
+
+  async exportChannelData(workspaceId: string): Promise<{
+    widgetConversations: { ticketId: string; visitorName: string | null; visitorEmail: string | null; createdAt?: string }[];
+    emailThreads: { ticketId: string; customerEmail: string; gmailThreadId: string }[];
+    slackThreads: { ticketId: string; channel: string; threadTs: string }[];
+  }> {
+    const widgetConversations = [...this.widgetConvos.values()]
+      .filter((c) => c.workspaceId === workspaceId)
+      .map((c) => ({ ticketId: c.ticketId, visitorName: c.visitorName, visitorEmail: c.visitorEmail }));
+    const emailThreads = [...this.emailThreads.values()]
+      .filter((e) => e.workspaceId === workspaceId)
+      .map((e) => ({ ticketId: e.ticketId, customerEmail: e.customerEmail, gmailThreadId: e.gmailThreadId }));
+    const slackThreads = [...this.slackThreads.values()]
+      .filter((t) => t.workspaceId === workspaceId)
+      .map((t) => ({ ticketId: t.ticketId, channel: t.channel, threadTs: t.threadTs }));
+    return { widgetConversations, emailThreads, slackThreads };
   }
 
   /* website chat widget -------------------------------------------------- */
@@ -689,16 +797,17 @@ export class MemoryRepository implements Repository {
     return { token, ticketId: ticket.id };
   }
 
-  async appendWidgetMessage(workspaceId: string, token: string, text: string): Promise<boolean> {
+  async appendWidgetMessage(workspaceId: string, token: string, text: string): Promise<"ok" | "unknown" | "limit"> {
     const conv = this.widgetConvos.get(token);
-    if (!conv || conv.workspaceId !== workspaceId) return false;
+    if (!conv || conv.workspaceId !== workspaceId) return "unknown";
     const t = this.ws(workspaceId).tickets.find((x) => x.id === conv.ticketId);
-    if (!t) return false;
+    if (!t) return "unknown";
+    if (t.messages.length >= WIDGET_MAX_MESSAGES) return "limit";
     this.append(t, { kind: "customer", author: conv.visitorName ?? t.customer.name, text });
     t.status = "open";
     t.stage = "new";
     t.unread = true;
-    return true;
+    return "ok";
   }
 
   async getWidgetTranscript(workspaceId: string, token: string): Promise<WidgetTranscriptMessage[] | null> {

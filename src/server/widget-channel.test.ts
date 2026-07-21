@@ -71,12 +71,12 @@ describe("website chat channel (in-memory backend)", () => {
     expect(transcript?.[1]?.text).toBe("Happy to help, Dana — refund issued.");
 
     // A follow-up visitor message threads onto the same ticket.
-    expect(await repo.appendWidgetMessage(workspaceId, token, "Thanks!")).toBe(true);
+    expect(await repo.appendWidgetMessage(workspaceId, token, "Thanks!")).toBe("ok");
     expect((await repo.getWidgetTranscript(workspaceId, token))?.length).toBe(3);
   });
 
   it("rejects unknown conversation tokens (no cross-conversation leakage)", async () => {
     expect(await repo.getWidgetTranscript(workspaceId, "bogus-token")).toBeNull();
-    expect(await repo.appendWidgetMessage(workspaceId, "bogus-token", "hi")).toBe(false);
+    expect(await repo.appendWidgetMessage(workspaceId, "bogus-token", "hi")).toBe("unknown");
   });
 });

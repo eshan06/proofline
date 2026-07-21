@@ -37,6 +37,10 @@ export const workspaces = pgTable("workspaces", {
   subscriptionStatus: text("subscription_status").notNull().default("active"), // active|trialing|past_due|canceled
   seats: integer("seats").notNull().default(3),
   currentPeriodEnd: text("current_period_end").notNull().default(""),
+  // Unix-seconds `created` of the last applied Stripe subscription event. Used to
+  // reject stale / out-of-order webhook deliveries (Stripe is at-least-once and
+  // does not guarantee ordering) so an old event can't clobber newer state.
+  subscriptionEventAt: integer("subscription_event_at").notNull().default(0),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   // Website chat widget: a public (non-secret) site key identifies the tenant
@@ -114,6 +118,33 @@ export const emailVerifications = pgTable("email_verifications", {
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
+
+/**
+ * Idempotency ledger for Stripe webhook events. The webhook inserts the event id
+ * before processing; a duplicate insert (Stripe redelivers at-least-once) fails
+ * the PK and signals "already handled", so subscription state is never mutated
+ * twice by the same event. Rows are pruned by the scheduled cleanup job.
+ */
+export const stripeEvents = pgTable("stripe_events", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Per-workspace, per-day AI-call counter. Backs a paid-tier spend ceiling so a
+ * single tenant can't drive unbounded LLM/embedding vendor cost. Keyed by
+ * (workspaceId, day) so the row count is bounded; old rows are pruned by cleanup.
+ */
+export const aiUsage = pgTable(
+  "ai_usage",
+  {
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    day: text("day").notNull(), // YYYY-MM-DD (UTC)
+    calls: integer("calls").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.workspaceId, t.day] })],
+);
 
 /**
  * Website chat widget conversations. The `token` is an unguessable per-visitor
