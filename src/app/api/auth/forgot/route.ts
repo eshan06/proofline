@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { handleApi, parseBody, enforceRateLimit } from "@/server/api";
+import { handleApi, parseBody, enforceRateLimit, enforceRateLimitKey } from "@/server/api";
 import { LIMITS } from "@/server/rate-limit";
 import { repo } from "@/server/repository";
 import { sendEmailSafe, passwordResetEmail } from "@/server/email";
@@ -15,6 +15,9 @@ export async function POST(req: Request) {
   return handleApi(async () => {
     await enforceRateLimit(req, "forgot", LIMITS.auth);
     const body = await parseBody(req, schema);
+    // Per-account throttle (keyed by email) so reset-email bombing a specific
+    // address can't be done by rotating source IPs past the per-IP limiter.
+    await enforceRateLimitKey(`forgot:acct:${body.email.toLowerCase()}`, LIMITS.auth);
     const r = repo();
     const user = await r.findUserByEmail(body.email);
     if (user) {

@@ -14,7 +14,12 @@ import { api, ApiClientError } from "@/lib/api-client";
 function SignInInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/home";
+  // Only allow same-origin relative paths as the post-login destination, so a
+  // crafted ?next=https://evil.example can't turn a real login into an
+  // open-redirect / phishing handoff. Rejects a second "/" OR "\" — browsers
+  // normalize "/\evil.com" to the protocol-relative "//evil.com".
+  const rawNext = params.get("next") || "/home";
+  const next = /^\/(?![/\\])/.test(rawNext) ? rawNext : "/home";
   const sessionExpired = params.get("reason") === "expired";
   const resetSuccess = params.get("reset") === "1";
   const verifyFailed = params.get("verify") === "failed";
@@ -26,19 +31,28 @@ function SignInInner() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       if (mode === "signup") {
+        // Signup is enumeration-safe and does not auto-sign-in: switch to the
+        // sign-in form (email prefilled) with a neutral confirmation. The same
+        // message shows whether or not the email already existed.
         await api.signUp({ name, email, password });
+        setMode("login");
+        setPassword("");
+        setNotice("Check your email to confirm your account, then sign in below.");
+        setBusy(false);
       } else {
         await api.logIn({ email, password });
+        router.push(next);
       }
-      router.push(next);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "Something went wrong");
       setBusy(false);
@@ -75,6 +89,11 @@ function SignInInner() {
         {verifyFailed ? (
           <div className="rounded-[8px] border border-warning/30 bg-warning/[0.06] px-4 py-3 text-[12.5px] text-warning-soft">
             That verification link has expired or was already used. Sign in and we&apos;ll send a new one.
+          </div>
+        ) : null}
+        {notice ? (
+          <div className="rounded-[8px] border border-success/30 bg-success/10 px-4 py-3 text-[12.5px] text-ink-2">
+            {notice}
           </div>
         ) : null}
 
@@ -133,7 +152,7 @@ function SignInInner() {
         <div className="flex items-center justify-between text-[12px] text-muted">
           <button
             type="button"
-            onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(null); }}
+            onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(null); setNotice(null); }}
             className="border-0 bg-transparent text-ink-4 hover:text-ink"
           >
             {mode === "login" ? "Create an account" : "I already have an account"}
