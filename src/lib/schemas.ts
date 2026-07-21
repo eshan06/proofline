@@ -253,7 +253,7 @@ export const copilotSettingsSchema = z.object({
   risk: z.enum(["conservative", "balanced", "autonomous"]),
   threshold: z.number().min(40).max(95),
   approvals: z.object({ low: z.boolean(), refund: z.boolean(), all: z.boolean() }),
-  neverSay: z.array(z.string()),
+  neverSay: z.array(z.string().max(200)).max(100),
 });
 export type CopilotSettings = z.infer<typeof copilotSettingsSchema>;
 
@@ -352,7 +352,7 @@ export const ticketPatchSchema = z.object({
   status: ticketStatusSchema.optional(),
   priority: prioritySchema.optional(),
   assignee: agentNameSchema.nullable().optional(),
-  addTag: z.string().optional(),
+  addTag: z.string().max(60).optional(),
 });
 export type TicketPatch = z.infer<typeof ticketPatchSchema>;
 
@@ -381,9 +381,9 @@ export const playgroundResultSchema = z.object({
 export type PlaygroundResult = z.infer<typeof playgroundResultSchema>;
 
 export const createAutomationSchema = z.object({
-  trigger: z.string().min(1),
-  conds: z.array(z.string()),
-  acts: z.array(z.string().min(1)).min(1),
+  trigger: z.string().min(1).max(120),
+  conds: z.array(z.string().max(200)).max(20),
+  acts: z.array(z.string().min(1).max(200)).min(1).max(20),
 });
 
 export const automationPatchSchema = z.object({
@@ -410,7 +410,7 @@ export const workspacePatchSchema = z.object({
 export const copilotPatchSchema = copilotSettingsSchema.partial();
 
 export const eventSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).max(120),
   props: z.record(z.string(), z.unknown()).optional(),
 });
 

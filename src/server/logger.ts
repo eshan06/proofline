@@ -7,6 +7,18 @@
 
 type Level = "debug" | "info" | "warn" | "error";
 
+/**
+ * Mask an email for logs so recipient PII isn't written in plaintext: keep the
+ * first character of the local part + the domain (enough to correlate/debug),
+ * redact the rest. "alice@acme.com" → "a***@acme.com".
+ */
+export function maskEmail(email: string | null | undefined): string {
+  if (!email) return "";
+  const at = email.indexOf("@");
+  if (at <= 0) return "***";
+  return `${email[0]}***${email.slice(at)}`;
+}
+
 function emit(level: Level, msg: string, fields?: Record<string, unknown>) {
   const line = JSON.stringify({
     level,

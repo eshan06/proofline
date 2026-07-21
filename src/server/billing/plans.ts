@@ -23,3 +23,25 @@ export function planForPrice(priceId: string | undefined): PlanName | null {
   if (priceId === process.env.STRIPE_PRICE_GROWTH) return "Growth";
   return null;
 }
+
+/** Subscription statuses that grant paid entitlements. */
+export type SubStatus = "active" | "trialing" | "past_due" | "canceled";
+
+/**
+ * Whether a subscription status grants paid access. `past_due` and `canceled`
+ * are explicitly NOT entitled — Stripe persists those when a card fails or a
+ * plan is cancelled, and a delinquent workspace must not keep paid features for
+ * the whole dunning window. Only `active` / `trialing` are entitled.
+ */
+export function isEntitled(status: string): boolean {
+  return status === "active" || status === "trialing";
+}
+
+/**
+ * The seat limit that actually applies given plan + status. A delinquent /
+ * cancelled workspace is gated to the Free seat limit regardless of the plan
+ * name still stored on the row, so it can't keep paid seats it isn't paying for.
+ */
+export function effectiveSeatLimit(plan: string, status: string): number {
+  return isEntitled(status) ? planSeatLimit(plan) : planSeatLimit("Free");
+}

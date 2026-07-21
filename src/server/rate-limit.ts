@@ -118,6 +118,12 @@ export const LIMITS = {
   auth: { capacity: 10, refillPerSec: 10 / 60 }, // ~10 attempts/min, refills over a minute
   ai: { capacity: 20, refillPerSec: 20 / 60 }, // ~20 AI calls/min
   api: { capacity: 60, refillPerSec: 1 }, // 60/min general
+  // New widget conversations (each creates a ticket): tighter than general intake
+  // so one IP can't flood a tenant's inbox with throwaway conversations.
+  widgetNew: { capacity: 20, refillPerSec: 20 / 600 }, // ~20 burst, then ~2/min
+  // KB upload runs synchronous parse + embedding on the request thread — gate it
+  // so one privileged seat can't pin CPU/memory with back-to-back heavy uploads.
+  upload: { capacity: 10, refillPerSec: 10 / 300 }, // ~10 burst, then ~2/min
 } as const;
 
 export function rateLimit(key: string, limit: RateLimit, now = Date.now()): Promise<RateResult> {

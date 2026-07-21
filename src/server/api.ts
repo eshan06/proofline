@@ -58,10 +58,104 @@ export async function enforceRateLimit(req: Request, scope: string, limit: RateL
   }
 }
 
-export async function parseBody<T>(req: Request, schema: ZodSchema<T>): Promise<T> {
+/**
+ * Throw 429 when an explicit key exceeds the limit. Used for per-account
+ * throttles (keyed by email) on auth endpoints, so brute-force/abuse can't be
+ * evaded by rotating source IPs (the per-IP limiter alone misses that).
+ */
+export async function enforceRateLimitKey(key: string, limit: RateLimit): Promise<void> {
+  const result = await rateLimit(key, limit);
+  if (!result.allowed) {
+    logger.warn("rate_limited", { key: key.split(":")[0], retryAfterSec: result.retryAfterSec });
+    throw new ApiError(429, `Too many requests — try again in ${result.retryAfterSec}s.`);
+  }
+}
+
+/** Per-workspace daily AI-call ceiling, bounding LLM/embedding vendor spend per tenant. */
+export const WORKSPACE_AI_DAILY_LIMIT = Number(process.env.WORKSPACE_AI_DAILY_LIMIT) || 2000;
+
+/**
+ * Block AI generation for a workspace whose paid subscription is delinquent
+ * (past_due) or cancelled. Real sessions only — demo sandboxes are seeded active
+ * and are throwaway. Keeps paid features (copilot/AI drafting) gated to entitled
+ * subscriptions instead of merely showing a status label.
+ */
+export async function requireAiEntitlement(session: SessionInfo): Promise<void> {
+  if (!session.userId) return; // demo / anonymous sandbox
+  const { isEntitled } = await import("@/server/billing/plans");
+  const sub = await repo().getSubscription(session.workspaceId);
+  if (!isEntitled(sub.status)) {
+    throw new ApiError(402, "This workspace's subscription is not active. Update billing to keep using the AI copilot.");
+  }
+}
+
+/**
+ * Consume one AI call against both budgets: the demo per-session cap (so a demo
+ * can't run unbounded inference) and the per-workspace daily cap (so a single
+ * paid tenant can't drive unbounded vendor cost). Throws 429 on either.
+ */
+export async function consumeAiBudget(session: SessionInfo): Promise<void> {
+  if (!(await repo().consumeAiCall(session.id))) {
+    throw new ApiError(429, "Demo AI limit reached — sign up to keep drafting.");
+  }
+  if (!(await repo().consumeWorkspaceAiCall(session.workspaceId, WORKSPACE_AI_DAILY_LIMIT))) {
+    throw new ApiError(429, "This workspace has reached its daily AI limit. It resets tomorrow (UTC).");
+  }
+}
+
+/** Default JSON body cap. Endpoints accepting larger payloads pass an override. */
+export const DEFAULT_MAX_BODY_BYTES = 64 * 1024; // 64 KB
+
+/**
+ * Read a request body as text with a hard byte cap, streaming so a missing or
+ * lying Content-Length can't be used to buffer an unbounded payload into memory
+ * (an OOM/DoS vector, especially on the public widget endpoint). Throws 413 when
+ * the cap is exceeded.
+ */
+export async function readBodyCapped(req: Request, maxBytes: number = DEFAULT_MAX_BODY_BYTES): Promise<string> {
+  const declared = Number(req.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    throw new ApiError(413, "Request body too large.");
+  }
+  const body = req.body;
+  if (!body) return "";
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        total += value.byteLength;
+        if (total > maxBytes) {
+          await reader.cancel().catch(() => {});
+          throw new ApiError(413, "Request body too large.");
+        }
+        chunks.push(value);
+      }
+    }
+  } finally {
+    reader.releaseLock?.();
+  }
+  return new TextDecoder().decode(concatChunks(chunks, total));
+}
+
+function concatChunks(chunks: Uint8Array[], total: number): Uint8Array {
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.byteLength;
+  }
+  return out;
+}
+
+export async function parseBody<T>(req: Request, schema: ZodSchema<T>, maxBytes: number = DEFAULT_MAX_BODY_BYTES): Promise<T> {
+  const text = await readBodyCapped(req, maxBytes);
   let raw: unknown;
   try {
-    raw = await req.json();
+    raw = JSON.parse(text);
   } catch {
     throw new ApiError(400, "Expected a JSON body.");
   }
@@ -84,6 +178,13 @@ export function handleApi<T>(fn: () => Promise<T>): Promise<NextResponse> {
       // two class identities, so a plain instanceof check is not reliable.
       if (err instanceof NotFoundError || (err instanceof Error && err.name === "NotFoundError")) {
         return NextResponse.json({ error: err.message }, { status: 404 });
+      }
+      // Repository-thrown domain errors (matched by name for the same reason).
+      if (err instanceof Error && err.name === "SeatLimitError") {
+        return NextResponse.json({ error: err.message }, { status: 402 });
+      }
+      if (err instanceof Error && err.name === "LastAdminError") {
+        return NextResponse.json({ error: err.message }, { status: 409 });
       }
       // Unexpected: report it (logs + optional alert) with a short correlation
       // id the client surfaces, so a user's "error abc123" maps to one log line.
