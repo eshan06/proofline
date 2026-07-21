@@ -5,6 +5,7 @@ import { repo } from "@/server/repository";
 import { hashPassword } from "@/server/auth/password";
 import { startRegularSession, currentSession } from "@/server/session";
 import { verifyInviteToken } from "@/server/invite-token";
+import { effectiveSeatLimit } from "@/server/billing/plans";
 
 const acceptInviteSchema = z.object({
   token: z.string().min(1),
@@ -37,12 +38,19 @@ export async function POST(req: Request) {
 
     const passwordHash = body.password ? await hashPassword(body.password) : undefined;
 
+    // Pass the effective seat limit so acceptInvite re-checks it atomically (under
+    // a workspace row lock) AND enforces single-use: a valid acceptance requires a
+    // still-pending Invited membership, so a stale/forged-but-valid 7-day token
+    // can't re-activate a removed member or be replayed after acceptance.
+    // SeatLimitError → 402, an invalid/used token → 404 (both via handleApi).
+    const sub = await r.getSubscription(payload.workspaceId);
     const { userId } = await r.acceptInvite({
       workspaceId: payload.workspaceId,
       email: payload.email,
       role: payload.role,
       name: body.name,
       passwordHash,
+      seatLimit: effectiveSeatLimit(sub.plan, sub.status),
     });
 
     // Start (or replace) the session for the newly-activated user.

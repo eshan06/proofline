@@ -1,11 +1,6 @@
-import { memberRolePatchSchema, type Member } from "@/lib/schemas";
+import { memberRolePatchSchema } from "@/lib/schemas";
 import { actorName, ApiError, handleApi, parseBody, requireSession, requireRole } from "@/server/api";
 import { repo } from "@/server/repository";
-
-/** Members who can actually administer the workspace right now (excludes pending invites). */
-function activeAdminCount(members: Member[]): number {
-  return members.filter((m) => m.role === "Admin" && m.status === "Active").length;
-}
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ userId: string }> }) {
   return handleApi(async () => {
@@ -17,16 +12,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ userId
     const body = await parseBody(req, memberRolePatchSchema);
     const r = repo();
 
-    // Guard: don't let the workspace lose its last active Admin by demotion.
-    if (body.role !== "Admin") {
-      const members = await r.listMembers(session.workspaceId);
-      const target = members.find((m) => m.userId === userId);
-      if (target?.role === "Admin" && target.status === "Active" && activeAdminCount(members) <= 1) {
-        throw new ApiError(400, "Cannot demote the last Admin — promote another member to Admin first.");
-      }
-    }
-
-    const member = await r.updateMemberRole(session.workspaceId, userId, body.role);
+    // The last-active-Admin invariant is enforced atomically in the repository
+    // (count + write under a row lock → LastAdminError/409), closing the TOCTOU
+    // where two concurrent demotions could both pass a read-then-write check.
+    const member = await r.updateMemberRoleGuarded(session.workspaceId, userId, body.role);
     await r.appendAudit(session.workspaceId, {
       user: await actorName(session),
       action: `Changed ${member.name}'s role to ${body.role}`,
@@ -49,24 +38,11 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ user
     }
 
     const r = repo();
-
-    // Guard: do not allow removing the last *active* Admin. Pending (Invited)
-    // admins can't manage the workspace yet, so they don't satisfy the invariant.
-    const members = await r.listMembers(session.workspaceId);
-    const targetMember = members.find((m) => m.userId === userId);
-    if (
-      targetMember?.role === "Admin" &&
-      targetMember.status === "Active" &&
-      activeAdminCount(members) <= 1
-    ) {
-      throw new ApiError(400, "Cannot remove the last Admin from the workspace.");
-    }
-
-    const memberName = targetMember?.name ?? userId;
-    await r.removeMember(session.workspaceId, userId);
+    // Last-active-Admin invariant enforced atomically in the repo (LastAdminError/409).
+    const { name } = await r.removeMemberGuarded(session.workspaceId, userId);
     await r.appendAudit(session.workspaceId, {
       user: await actorName(session),
-      action: `Removed ${memberName} from the workspace`,
+      action: `Removed ${name} from the workspace`,
       type: "Team",
     });
     return { ok: true };

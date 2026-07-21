@@ -1,8 +1,8 @@
 import { inviteMemberSchema } from "@/lib/schemas";
-import { actorName, ApiError, handleApi, parseBody, requireSession, requireRole } from "@/server/api";
+import { actorName, handleApi, parseBody, requireSession, requireRole } from "@/server/api";
 import { repo } from "@/server/repository";
 import { sendEmailSafe, inviteEmail } from "@/server/email";
-import { planSeatLimit } from "@/server/billing/plans";
+import { effectiveSeatLimit } from "@/server/billing/plans";
 import { createInviteToken } from "@/server/invite-token";
 
 export async function POST(req: Request) {
@@ -12,14 +12,13 @@ export async function POST(req: Request) {
     const body = await parseBody(req, inviteMemberSchema);
     const r = repo();
 
-    // Seat-limit enforcement — paid tiers actually differ from Free.
-    const [sub, used] = await Promise.all([r.getSubscription(session.workspaceId), r.countMembers(session.workspaceId)]);
-    const limit = planSeatLimit(sub.plan);
-    if (used >= limit) {
-      throw new ApiError(402, `Your ${sub.plan} plan includes ${limit} seats. Upgrade to invite more teammates.`);
-    }
-
-    const member = await r.inviteMember(session.workspaceId, body.email, body.role);
+    // Seat-limit enforcement — paid tiers actually differ from Free, and a
+    // delinquent (past_due/canceled) workspace is gated to the Free limit. The
+    // count + insert happen atomically in the repo (SeatLimitError → 402) so
+    // concurrent invites can't overrun the cap.
+    const sub = await r.getSubscription(session.workspaceId);
+    const limit = effectiveSeatLimit(sub.plan, sub.status);
+    const member = await r.inviteMemberGuarded(session.workspaceId, body.email, body.role, limit);
     const ws = await r.getWorkspace(session.workspaceId);
     await r.appendAudit(session.workspaceId, {
       user: await actorName(session),
