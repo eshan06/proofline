@@ -16,14 +16,19 @@ export async function GET() {
     const role = await r.membershipRole(session.userId, session.workspaceId);
     if (role !== "Admin") return NextResponse.json({ error: "Admin access required to export." }, { status: 403 });
   }
-  const [ws, user] = await Promise.all([
+  const [ws, user, channels] = await Promise.all([
     r.getWorkspace(session.workspaceId),
     session.userId ? r.getUser(session.userId) : Promise.resolve(null),
+    // End-customer PII captured via the chat widget / Gmail / Slack channels —
+    // getWorkspace omits these tables, so a "download everything" export must add
+    // them to be a complete subject-access/portability response (GDPR).
+    r.exportChannelData(session.workspaceId),
   ]);
   const payload = {
     exportedAt: new Date().toISOString(),
     account: user ? { name: user.name, email: user.email } : null,
     workspace: ws,
+    channelContacts: channels,
   };
   return new NextResponse(JSON.stringify(payload, null, 2), {
     headers: {

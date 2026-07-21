@@ -1,4 +1,4 @@
-import { logger } from "@/server/logger";
+import { logger, maskEmail } from "@/server/logger";
 
 /**
  * Gmail channel provider. Like the LLM / billing / transactional-email seams,
@@ -221,7 +221,7 @@ class GoogleGmailProvider implements GmailProvider {
     });
     if (!res.ok) throw new Error(`Gmail send ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
     const sent = (await res.json()) as { id: string; threadId: string };
-    logger.info("gmail.sent", { to: input.to, threadId: sent.threadId });
+    logger.info("gmail.sent", { to: maskEmail(input.to), threadId: sent.threadId });
     return { messageId: sent.id, threadId: sent.threadId };
   }
 

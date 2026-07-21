@@ -1,4 +1,4 @@
-import { logger } from "@/server/logger";
+import { logger, maskEmail } from "@/server/logger";
 
 /**
  * Transactional email. The UI/handlers depend only on EmailProvider; the dev
@@ -18,7 +18,7 @@ export interface EmailProvider {
 
 class ConsoleEmailProvider implements EmailProvider {
   async send(msg: EmailMessage): Promise<void> {
-    logger.info("email.send", { to: msg.to, subject: msg.subject });
+    logger.info("email.send", { to: maskEmail(msg.to), subject: msg.subject });
     // The body is intentionally not logged in full (may contain tokens).
   }
 }
@@ -35,7 +35,7 @@ class ResendEmailProvider implements EmailProvider {
     if (!res.ok) {
       throw new Error(`Resend ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
     }
-    logger.info("email.sent", { to: msg.to, subject: msg.subject, provider: "resend" });
+    logger.info("email.sent", { to: maskEmail(msg.to), subject: msg.subject, provider: "resend" });
   }
 }
 
@@ -76,7 +76,7 @@ export function email(): EmailProvider {
 export function sendEmailSafe(msg: EmailMessage, context: string): void {
   void email()
     .send(msg)
-    .catch((err) => logger.reportError("email.send_failed", err, { to: msg.to, context }));
+    .catch((err) => logger.reportError("email.send_failed", err, { to: maskEmail(msg.to), context }));
 }
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
