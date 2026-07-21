@@ -31,3 +31,5 @@ yarn-error.log*
 
 # sandbox-only migration helper (db:migrate needs node TS-strip this build lacks)
 _tmp_*
+test-results/
+playwright-report/

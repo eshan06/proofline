@@ -34,4 +34,15 @@ describe("verifyStripeSignature", () => {
     const stale = Math.floor(Date.now() / 1000) - 10_000;
     expect(() => verifyStripeSignature(payload, sign(payload, secret, stale), secret)).toThrow();
   });
+
+  it("accepts any matching v1 during a secret rotation (multiple v1 entries)", () => {
+    // While rotating the webhook secret Stripe signs with both secrets and sends
+    // two v1 entries; verification must accept if ANY matches — including when
+    // the matching one comes first.
+    const t = Math.floor(Date.now() / 1000);
+    const good = crypto.createHmac("sha256", secret).update(`${t}.${payload}`).digest("hex");
+    const other = crypto.createHmac("sha256", "whsec_old_secret").update(`${t}.${payload}`).digest("hex");
+    expect(verifyStripeSignature(payload, `t=${t},v1=${good},v1=${other}`, secret).type).toBe("checkout.session.completed");
+    expect(verifyStripeSignature(payload, `t=${t},v1=${other},v1=${good}`, secret).type).toBe("checkout.session.completed");
+  });
 });
