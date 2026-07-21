@@ -14,6 +14,15 @@ const OAUTH_CHANNELS: { key: IntegrationKey; label: string }[] = [
   { key: "slack", label: "Slack" },
 ];
 
+/**
+ * Integrations with a real backend. Everything else has no data flow yet, so its
+ * Connect toggle would assert a green "Connected" state that does nothing — we
+ * render those as an honest "Coming soon" instead of letting them fake a
+ * connection (the same honesty stance as the KB connector tiles).
+ */
+const SUPPORTED_KEYS: IntegrationKey[] = ["webchat", "gmail", "slack"];
+const isSupported = (key: IntegrationKey) => SUPPORTED_KEYS.includes(key);
+
 function oauthResultMessage(label: string, result: string): string | null {
   switch (result) {
     case "connected": return `${label} connected.`;
@@ -47,9 +56,16 @@ export function IntegrationsView() {
     if (matched) window.history.replaceState(null, "", window.location.pathname);
   }, []);
 
-  const connectedCount = integrations.filter((i) => i.connected).length;
+  // Count only integrations the tiles actually render as connected — an
+  // unsupported one is forced to "Coming soon" below, so it must not be counted.
+  const connectedCount = integrations.filter((i) => isSupported(i.key) && i.connected).length;
 
   const onToggle = (g: Integration) => {
+    // No real backend yet — don't fake a connection.
+    if (!isSupported(g.key)) {
+      toast(`${g.name} integration is coming soon`);
+      return;
+    }
     // Gmail/Slack connect via a real OAuth round-trip, not a boolean flip.
     if (OAUTH_CHANNELS.some((c) => c.key === g.key) && !g.connected) {
       window.location.href = `/api/integrations/${g.key}/connect`;
@@ -71,7 +87,11 @@ export function IntegrationsView() {
 
         <div className="mt-5 grid grid-cols-3 gap-3">
           {integrations.map((g) => {
-            const panelOpen = openPanel === g.key && g.connected;
+            const supported = isSupported(g.key);
+            // Only a supported integration can truly be connected — never render a
+            // green "Connected" state for one with no backend.
+            const connected = supported && g.connected;
+            const panelOpen = openPanel === g.key && connected;
             return (
               <div
                 key={g.key}
@@ -86,27 +106,38 @@ export function IntegrationsView() {
                     <span className="text-[13px] font-semibold text-ink">{g.name}</span>
                     <span className="truncate text-[10.5px] text-muted">{g.desc}</span>
                   </div>
-                  <span className="ml-auto h-[7px] w-[7px] shrink-0 rounded-full" style={{ background: g.connected ? "#3DD68C" : "#444B5C" }} />
+                  <span className="ml-auto h-[7px] w-[7px] shrink-0 rounded-full" style={{ background: connected ? "#3DD68C" : "#444B5C" }} />
                 </div>
                 <div className="flex items-center gap-[7px] text-[10.5px] text-muted">
-                  <span className="truncate">{g.connected ? g.perms : "Not connected"}</span>
+                  <span className="truncate">{connected ? g.perms : supported ? "Not connected" : "Coming soon"}</span>
                   <span className="flex-1" />
-                  <span className="shrink-0 font-mono">{g.connected ? g.last : "—"}</span>
+                  <span className="shrink-0 font-mono">{connected ? g.last : "—"}</span>
                 </div>
                 <div className="flex gap-[7px]">
-                  <button
-                    type="button"
-                    onClick={() => onToggle(g)}
-                    className="flex-1 rounded-[7px] border px-0 py-1.5 text-[11.5px] font-medium hover:opacity-85"
-                    style={{
-                      background: g.connected ? "rgba(255,255,255,0.04)" : "#4D7CFE",
-                      borderColor: g.connected ? "rgba(255,255,255,0.1)" : "transparent",
-                      color: g.connected ? "#8A93A6" : "#fff",
-                    }}
-                  >
-                    {g.connected ? "Disconnect" : "Connect"}
-                  </button>
-                  {g.connected && g.configurable ? (
+                  {supported ? (
+                    <button
+                      type="button"
+                      onClick={() => onToggle(g)}
+                      className="flex-1 rounded-[7px] border px-0 py-1.5 text-[11.5px] font-medium hover:opacity-85"
+                      style={{
+                        background: connected ? "rgba(255,255,255,0.04)" : "#4D7CFE",
+                        borderColor: connected ? "rgba(255,255,255,0.1)" : "transparent",
+                        color: connected ? "#8A93A6" : "#fff",
+                      }}
+                    >
+                      {connected ? "Disconnect" : "Connect"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      title={`${g.name} integration is coming soon`}
+                      className="flex-1 cursor-not-allowed rounded-[7px] border border-white/10 bg-white/[0.03] px-0 py-1.5 text-[11.5px] font-medium text-muted opacity-70"
+                    >
+                      Coming soon
+                    </button>
+                  )}
+                  {connected && g.configurable ? (
                     <button
                       type="button"
                       onClick={() => setOpenPanel(g.key)}

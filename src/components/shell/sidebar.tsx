@@ -6,7 +6,6 @@ import { ExternalLink, LogOut } from "lucide-react";
 import { Logo } from "./logo";
 import { NAV_ITEMS } from "./nav-items";
 import { OnboardingChecklist } from "./onboarding-checklist";
-import { toast } from "@/stores/toasts";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import type { CurrentUser } from "@/lib/schemas";
@@ -37,20 +36,15 @@ export function Sidebar({
 
   return (
     <div className="flex w-[220px] shrink-0 flex-col border-r border-white/7 bg-panel">
-      {/* workspace switcher */}
-      <button
-        type="button"
-        onClick={() => toast("Workspace switcher — coming with multi-workspace support")}
-        aria-label="Workspace menu"
-        className="m-2.5 flex cursor-pointer items-center gap-[9px] rounded-lg border-0 bg-transparent p-2 px-[9px] text-left hover:bg-white/5"
-      >
+      {/* workspace identity — static (multi-workspace switching doesn't exist yet,
+          so we don't render a dropdown affordance that implies it does) */}
+      <div className="m-2.5 flex items-center gap-[9px] rounded-lg p-2 px-[9px] text-left">
         <Logo size={26} />
         <span className="flex min-w-0 flex-col gap-px">
           <span className="truncate text-[13px] font-semibold tracking-[-0.01em] text-ink">{workspaceName}</span>
           <span className="text-[10.5px] text-muted">{planLabel}</span>
         </span>
-        <span className="ml-auto text-[10px] text-muted">▾</span>
-      </button>
+      </div>
 
       {/* nav */}
       <nav className="flex flex-col gap-px px-2.5 py-1" aria-label="Main">

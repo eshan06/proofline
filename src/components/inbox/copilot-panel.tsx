@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, Sparkles } from "lucide-react";
 import { EvidenceCard } from "./evidence-card";
 import { useInboxStore } from "@/stores/inbox";
-import { useWorkspace } from "@/hooks/use-workspace";
+import { useWorkspace, WORKSPACE_KEY } from "@/hooks/use-workspace";
 import { toast } from "@/stores/toasts";
 import { api } from "@/lib/api-client";
 import {
   useDraftAction,
   useEscalateTicket,
+  useCloseTicket,
 } from "@/hooks/use-ticket-actions";
 import { confidenceColor, confidencePercent, isLowConfidence } from "@/lib/confidence";
 import type { Ticket } from "@/lib/schemas";
@@ -66,6 +68,8 @@ export function CopilotPanel({ ticket, isDemo }: { ticket: Ticket; isDemo: boole
 
   const draftAction = useDraftAction();
   const escalate = useEscalateTicket();
+  const close = useCloseTicket();
+  const queryClient = useQueryClient();
   const { data: ws } = useWorkspace();
 
   const draft = ticket.draft;
@@ -119,11 +123,31 @@ export function CopilotPanel({ ticket, isDemo }: { ticket: Ticket; isDemo: boole
         "I’ve processed a full refund to your original payment method — you’ll see it within 5–10 business days, along with an emailed credit note.";
       setComposer(ticket.id, composer ? `${composer}\n\n${macro}` : macro);
       toast("Refund macro inserted");
-    } else if (label.startsWith("Escalate")) {
-      escalate.mutate({ id: ticket.id });
-    } else {
-      toast(`“${label}” applied`);
+      return;
     }
+    if (/^escalate/i.test(label)) {
+      escalate.mutate({ id: ticket.id });
+      return;
+    }
+    if (/^close/i.test(label)) {
+      close.mutate({ id: ticket.id });
+      return;
+    }
+    // "Add tag: <name>" → a real tag mutation. (A generic "Add a tag" with no
+    // specific tag isn't actionable and falls through to the honest path below.)
+    const tagMatch = label.match(/^add (?:a )?tag[:\s]+(.+)$/i);
+    if (tagMatch?.[1]) {
+      const tag = tagMatch[1].trim();
+      api
+        .patchTicket(ticket.id, { addTag: tag })
+        .then(() => queryClient.invalidateQueries({ queryKey: WORKSPACE_KEY }))
+        .then(() => toast(`Tagged “${tag}”`))
+        .catch((err: Error) => toast(err.message));
+      return;
+    }
+    // No backend for this suggestion — be honest rather than toasting a fake
+    // success on a real customer ticket.
+    toast(`“${label}” isn't available yet — apply it from the ticket header.`);
   };
 
   const buttonsDisabled = regenerating;
