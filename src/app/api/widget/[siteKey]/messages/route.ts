@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import { widgetMessageSchema } from "@/lib/schemas";
 import { repo } from "@/server/repository";
 import { clientKey, rateLimit, LIMITS } from "@/server/rate-limit";
+import { readBodyCapped } from "@/server/api";
 import { widgetCorsOrigin, corsHeaders } from "@/server/widget-cors";
 import { logger } from "@/server/logger";
+
+/** Public widget intake: a small JSON body is all that's ever expected. */
+const WIDGET_MAX_BODY_BYTES = 16 * 1024;
 
 /**
  * Public, unauthenticated website-chat intake. Inbound visitor messages create
@@ -43,9 +47,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ siteKey: strin
     return NextResponse.json({ error: "Too many messages — slow down." }, { status: 429, headers });
   }
 
+  // Bounded read (public + unauthenticated): cap the body so a forged request
+  // can't stream an unbounded payload into memory before validation.
+  let raw: string;
+  try {
+    raw = await readBodyCapped(req, WIDGET_MAX_BODY_BYTES);
+  } catch {
+    return NextResponse.json({ error: "Request body too large." }, { status: 413, headers });
+  }
   let body;
   try {
-    body = widgetMessageSchema.parse(await req.json());
+    body = widgetMessageSchema.parse(JSON.parse(raw));
   } catch {
     return NextResponse.json({ error: "Expected { text, conversationId? }." }, { status: 400, headers });
   }
@@ -53,9 +65,16 @@ export async function POST(req: Request, ctx: { params: Promise<{ siteKey: strin
   const repoI = repo();
   let token = body.conversationId;
   if (token) {
-    const ok = await repoI.appendWidgetMessage(r.workspaceId, token, body.text);
-    if (!ok) return NextResponse.json({ error: "Unknown conversation." }, { status: 404, headers });
+    const res = await repoI.appendWidgetMessage(r.workspaceId, token, body.text);
+    if (res === "unknown") return NextResponse.json({ error: "Unknown conversation." }, { status: 404, headers });
+    if (res === "limit") return NextResponse.json({ error: "This conversation has reached its message limit." }, { status: 429, headers });
   } else {
+    // Starting a conversation creates a ticket — gate it more tightly per IP so a
+    // single source can't flood the tenant inbox with throwaway conversations.
+    const newRl = await rateLimit(clientKey(req, "widget-new"), LIMITS.widgetNew);
+    if (!newRl.allowed) {
+      return NextResponse.json({ error: "Too many new conversations — try again shortly." }, { status: 429, headers });
+    }
     const started = await repoI.startWidgetConversation(r.workspaceId, body.visitor ?? {}, body.text);
     token = started.token;
     logger.event("widget.conversation_started", { workspaceId: r.workspaceId, ticketId: started.ticketId });

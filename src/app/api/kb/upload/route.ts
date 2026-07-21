@@ -1,9 +1,13 @@
-import { ApiError, handleApi, requireRole, requireSession, trackEvent } from "@/server/api";
+import { ApiError, handleApi, requireRole, requireSession, trackEvent, enforceRateLimitKey } from "@/server/api";
+import { LIMITS } from "@/server/rate-limit";
 import { MOCK_LATENCY } from "@/server/ai/provider";
 import { repo } from "@/server/repository";
 import { hasDatabase } from "@/server/db/client";
 import { chunkText, ingestDocument } from "@/server/ai/rag";
 import { logger } from "@/server/logger";
+
+/** Cap on extracted text length (post-decompression), bounding embed cost/memory. */
+const MAX_EXTRACT_CHARS = 1_000_000;
 
 /**
  * Knowledge-base upload. Two paths share this endpoint:
@@ -22,6 +26,9 @@ export async function POST(req: Request) {
   return handleApi(async () => {
     const session = await requireSession();
     await requireRole(session, ["Admin", "Agent"]);
+    // Gate the heavy parse+embed work per workspace (no IP component — the cap
+    // is on the tenant's aggregate load) so one seat can't pin CPU.
+    await enforceRateLimitKey(`upload:${session.workspaceId}`, LIMITS.upload);
     const r = repo();
     const contentType = req.headers.get("content-type") ?? "";
 
@@ -32,8 +39,14 @@ export async function POST(req: Request) {
       const MAX_BYTES = 10 * 1024 * 1024;
       if (file.size > MAX_BYTES) throw new ApiError(413, "File too large — the limit is 10 MB.");
       const name = (file.name || "Untitled.txt").slice(0, 160);
-      const text = await extractText(file, name);
+      let text = await extractText(file, name);
       if (!text.trim()) throw new ApiError(400, "That file appears to be empty.");
+      // Cap post-decompression text so a small archive that expands to huge text
+      // (a decompression bomb) can't drive unbounded chunking/embedding.
+      if (text.length > MAX_EXTRACT_CHARS) {
+        logger.warn("kb.extract_truncated", { name, originalChars: text.length });
+        text = text.slice(0, MAX_EXTRACT_CHARS);
+      }
 
       const doc = await r.addKbDoc(session.workspaceId, {
         name,
@@ -114,19 +127,30 @@ async function extractText(file: File, name: string): Promise<string> {
       .trim();
   }
   if (type === "application/pdf" || /\.pdf$/i.test(name)) {
+    const buf = new Uint8Array(await file.arrayBuffer());
+    // Sniff the magic bytes (%PDF) so a mislabeled file can't be steered into the
+    // PDF parser by extension/MIME alone.
+    if (!(buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46)) {
+      throw new ApiError(415, "That file isn't a valid PDF.");
+    }
     try {
       // Lazy-load the parser so it never bloats the main server bundle.
       const { PDFParse } = await import("pdf-parse");
-      const parser = new PDFParse({ data: new Uint8Array(await file.arrayBuffer()) });
+      const parser = new PDFParse({ data: buf });
       return (await parser.getText()).text;
     } catch {
       throw new ApiError(422, "Couldn't extract text from that PDF — it may be scanned (image-only) or corrupt.");
     }
   }
   if (type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || /\.docx$/i.test(name)) {
+    const buf = Buffer.from(await file.arrayBuffer());
+    // DOCX is a zip — sniff the local-file-header magic (PK\x03\x04).
+    if (!(buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04)) {
+      throw new ApiError(415, "That file isn't a valid .docx document.");
+    }
     try {
       const mammoth = await import("mammoth");
-      return (await mammoth.extractRawText({ buffer: Buffer.from(await file.arrayBuffer()) })).value;
+      return (await mammoth.extractRawText({ buffer: buf })).value;
     } catch {
       throw new ApiError(422, "Couldn't read that Word document.");
     }

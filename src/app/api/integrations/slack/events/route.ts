@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { slack } from "@/server/slack/slack";
 import { repo } from "@/server/repository";
+import { readBodyCapped } from "@/server/api";
 import { logger } from "@/server/logger";
+
+/** Generous for Slack Events API payloads; caps a forged pre-verification body. */
+const SLACK_MAX_BODY_BYTES = 256 * 1024;
 
 /**
  * Slack Events API webhook. Unauthenticated by session — authorized by the Slack
@@ -24,7 +28,14 @@ interface SlackEvent {
 }
 
 export async function POST(req: Request) {
-  const raw = await req.text();
+  // Streamed, byte-capped read — this endpoint is public, so the body must be
+  // bounded BEFORE the signature check can reject the request.
+  let raw: string;
+  try {
+    raw = await readBodyCapped(req, SLACK_MAX_BODY_BYTES);
+  } catch {
+    return NextResponse.json({ error: "Request body too large." }, { status: 413 });
+  }
   const s = slack();
 
   if (!s.verifyRequest(raw, req.headers.get("x-slack-request-timestamp"), req.headers.get("x-slack-signature"))) {

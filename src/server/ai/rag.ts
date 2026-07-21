@@ -36,6 +36,13 @@ export interface RetrievedChunk {
   similarity: number; // cosine similarity in [0,1]
 }
 
+/**
+ * Hard ceiling on chunks embedded per document, so a pathologically large (or
+ * decompression-bomb) upload can't drive unbounded embedding cost / memory. At
+ * ~60 words/chunk this is a generous ceiling for legitimate docs.
+ */
+export const MAX_CHUNKS_PER_DOC = Number(process.env.MAX_CHUNKS_PER_DOC) || 1500;
+
 /** Ingest a document's sections into kb_chunks (chunk → embed → store). */
 export async function ingestDocument(input: {
   workspaceId: string;
@@ -46,22 +53,27 @@ export async function ingestDocument(input: {
   const db = getDb();
   const emb = embedder();
 
-  const rows: { id: string; docId: string; workspaceId: string; docTitle: string; path: string; content: string; embedding: number[] }[] = [];
+  // Collect chunks up to the per-doc ceiling before embedding (embedding is the
+  // expensive, billable step), so an oversized doc is bounded, not unbounded.
+  const pending: { path: string; content: string }[] = [];
   for (const section of input.sections) {
-    const chunks = chunkText(section.text);
-    const vectors = await emb.embed(chunks);
-    chunks.forEach((content, i) => {
-      rows.push({
-        id: uid("ch"),
-        docId: input.docId,
-        workspaceId: input.workspaceId,
-        docTitle: input.docTitle,
-        path: section.path,
-        content,
-        embedding: vectors[i]!,
-      });
-    });
+    for (const content of chunkText(section.text)) {
+      if (pending.length >= MAX_CHUNKS_PER_DOC) break;
+      pending.push({ path: section.path, content });
+    }
+    if (pending.length >= MAX_CHUNKS_PER_DOC) break;
   }
+
+  const vectors = await emb.embed(pending.map((p) => p.content));
+  const rows = pending.map((p, i) => ({
+    id: uid("ch"),
+    docId: input.docId,
+    workspaceId: input.workspaceId,
+    docTitle: input.docTitle,
+    path: p.path,
+    content: p.content,
+    embedding: vectors[i]!,
+  }));
   if (rows.length) await db.insert(schema.kbChunks).values(rows);
   return rows.length;
 }

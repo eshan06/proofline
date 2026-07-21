@@ -1,5 +1,5 @@
 import { draftActionSchema } from "@/lib/schemas";
-import { ApiError, handleApi, parseBody, requireRole, requireSession, enforceRateLimit } from "@/server/api";
+import { ApiError, handleApi, parseBody, requireRole, requireSession, enforceRateLimit, requireAiEntitlement, consumeAiBudget } from "@/server/api";
 import { LIMITS } from "@/server/rate-limit";
 import { getDraftProvider } from "@/server/ai";
 import { runAutomations } from "@/server/automations/engine";
@@ -23,10 +23,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       return r.setDraft(session.workspaceId, id, { ...ticket.draft, text: body.text });
     }
 
-    await enforceRateLimit(req, "ai", LIMITS.ai);
-    if (!(await r.consumeAiCall(session.id))) {
-      throw new ApiError(429, "Demo AI limit reached — sign up to keep drafting.");
-    }
+    // Block AI generation for a delinquent/cancelled subscription (real sessions).
+    await requireAiEntitlement(session);
+    // Rate limit keyed per-workspace (not just per source IP) so a NAT'd team
+    // doesn't share one bucket and so cost is attributable per tenant.
+    await enforceRateLimit(req, `ai:${session.workspaceId}`, LIMITS.ai);
+    await consumeAiBudget(session);
 
     const [kbDocs, copilot] = await Promise.all([
       r.getKbDocs(session.workspaceId),

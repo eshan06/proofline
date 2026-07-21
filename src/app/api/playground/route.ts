@@ -1,5 +1,5 @@
 import { playgroundRequestSchema } from "@/lib/schemas";
-import { ApiError, handleApi, parseBody, requireRole, requireSession, enforceRateLimit } from "@/server/api";
+import { handleApi, parseBody, requireRole, requireSession, enforceRateLimit, requireAiEntitlement, consumeAiBudget } from "@/server/api";
 import { LIMITS } from "@/server/rate-limit";
 import { getDraftProvider } from "@/server/ai";
 import { runAutomations } from "@/server/automations/engine";
@@ -12,12 +12,11 @@ export async function POST(req: Request) {
     // draft route's ordering.
     const session = await requireSession();
     await requireRole(session, ["Admin", "Agent"]);
-    await enforceRateLimit(req, "ai", LIMITS.ai);
+    await requireAiEntitlement(session);
+    await enforceRateLimit(req, `ai:${session.workspaceId}`, LIMITS.ai);
     const body = await parseBody(req, playgroundRequestSchema);
     const r = repo();
-    if (!(await r.consumeAiCall(session.id))) {
-      throw new ApiError(429, "Demo AI limit reached — sign up to keep drafting.");
-    }
+    await consumeAiBudget(session);
     const [kbDocs, copilot] = await Promise.all([
       r.getKbDocs(session.workspaceId),
       r.getCopilot(session.workspaceId),

@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, FileText, Plus } from "lucide-react";
+import { AlertTriangle, FileText, Plus, Trash2 } from "lucide-react";
 import { useWorkspace, WORKSPACE_KEY } from "@/hooks/use-workspace";
 import { api } from "@/lib/api-client";
 import { toast } from "@/stores/toasts";
 import type { KbDoc } from "@/lib/schemas";
 
-const GRID = "grid-cols-[1fr_110px_120px_70px_70px_110px]";
+const GRID = "grid-cols-[1fr_110px_120px_70px_70px_110px_36px]";
 
 // Connectors are integration teasers with no sync backend yet, so none claim a
 // live "Connected" state with fabricated doc counts — that would mislead a real
@@ -46,6 +46,18 @@ export function KbView() {
       await queryClient.invalidateQueries({ queryKey: WORKSPACE_KEY });
     } finally {
       uploadingRef.current = false;
+    }
+  };
+
+  // Delete a doc from the knowledge base (also drops its embeddings server-side).
+  const deleteDoc = async (doc: KbDoc) => {
+    if (!window.confirm(`Delete “${doc.name}”? This removes it from the AI's knowledge base and can't be undone.`)) return;
+    try {
+      await api.deleteKbDoc(doc.id);
+      await queryClient.invalidateQueries({ queryKey: WORKSPACE_KEY });
+      toast(`Deleted “${doc.name}”`);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Delete failed");
     }
   };
 
@@ -109,10 +121,12 @@ export function KbView() {
           <span className="flex-1" />
           <button
             type="button"
-            onClick={() => toast("Add URL — paste a public docs link to crawl")}
-            className="rounded-[7px] border border-white/9 bg-white/5 px-[13px] py-[7px] text-[12px] font-medium text-ink-2 hover:bg-white/9"
+            disabled
+            title="URL crawling is coming soon"
+            onClick={() => toast("URL crawling is coming soon — upload a file for now")}
+            className="cursor-not-allowed rounded-[7px] border border-white/9 bg-white/5 px-[13px] py-[7px] text-[12px] font-medium text-muted opacity-60"
           >
-            Add URL
+            Add URL · soon
           </button>
           <input
             ref={fileRef}
@@ -167,6 +181,7 @@ export function KbView() {
             <span className="text-right">Chunks</span>
             <span className="text-right">Cited</span>
             <span className="text-right">Last synced</span>
+            <span />
           </div>
           {docs.map((d) => {
             const st = statusStyle(d.status);
@@ -191,6 +206,15 @@ export function KbView() {
                 <span className="text-right font-mono text-[11px] text-ink-4">{d.chunks}</span>
                 <span className="text-right font-mono text-[11px] text-ink-4">{d.cited}</span>
                 <span className="text-right font-mono text-[10.5px] text-muted">{d.synced}</span>
+                <button
+                  type="button"
+                  onClick={() => void deleteDoc(d)}
+                  title={`Delete “${d.name}”`}
+                  aria-label={`Delete ${d.name}`}
+                  className="flex h-6 w-6 items-center justify-center rounded-[6px] border-0 bg-transparent text-muted hover:bg-white/5 hover:text-danger"
+                >
+                  <Trash2 size={13} strokeWidth={1.4} />
+                </button>
               </div>
             );
           })}

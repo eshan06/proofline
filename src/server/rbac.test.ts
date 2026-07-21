@@ -108,10 +108,14 @@ describe("route policy manifest", () => {
     // Edit knowledge base → Admin, Agent
     "src/app/api/kb/upload/route.ts": ADMIN_AGENT,
     "src/app/api/kb/[id]/retry/route.ts": ADMIN_AGENT,
+    "src/app/api/kb/[id]/route.ts": ADMIN_AGENT,
     // Manage automations / Billing & members → Admin only
     "src/app/api/automations/route.ts": ADMIN_ONLY,
     "src/app/api/automations/[id]/route.ts": ADMIN_ONLY,
     "src/app/api/billing/checkout/route.ts": ADMIN_ONLY,
+    "src/app/api/billing/portal/route.ts": ADMIN_ONLY,
+    "src/app/api/members/route.ts": ADMIN_ONLY,
+    "src/app/api/members/[userId]/route.ts": ADMIN_ONLY,
   };
 
   for (const [file, expected] of Object.entries(ROUTE_POLICY)) {

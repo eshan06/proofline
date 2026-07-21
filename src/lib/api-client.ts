@@ -56,6 +56,8 @@ export const api = {
 
   retryKbDoc: (id: string) => request(`/api/kb/${id}/retry`, { method: "POST" }),
 
+  deleteKbDoc: (id: string) => request(`/api/kb/${id}`, { method: "DELETE" }),
+
   createAutomation: (body: { trigger: string; conds: string[]; acts: string[] }) =>
     request("/api/automations", { method: "POST", body: JSON.stringify(body) }),
 
