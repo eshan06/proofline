@@ -23,5 +23,13 @@ export default defineConfig({
     url: "http://localhost:3000/api/health",
     timeout: 120_000,
     reuseExistingServer: !process.env.CI,
+    // `next start` is a real production boot, so the startup env validator runs.
+    // Satisfy it self-contained-ly: a throwaway (non-dev-fallback) invite secret
+    // and an explicit localhost app URL, so e2e needs no .env.local and works
+    // identically on a fresh clone and in CI.
+    env: {
+      INVITE_SECRET: process.env.INVITE_SECRET ?? "e2e-smoke-only-invite-secret-not-for-prod",
+      NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+    },
   },
 });

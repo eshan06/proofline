@@ -1,6 +1,8 @@
 # Local production-like stack: app + Postgres (with pgvector).
-#   docker compose up --build
+#   INVITE_SECRET=$(openssl rand -hex 32) docker compose up --build
 #   docker compose run --rm app npm run db:migrate   # first-time schema apply
+# INVITE_SECRET is required (the app refuses to boot in production with the
+# known dev fallback — it signs Admin invite tokens).
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -32,6 +34,7 @@ services:
       EMAIL_PROVIDER: console
       BILLING_PROVIDER: mock
       NEXT_PUBLIC_APP_URL: http://localhost:3000
+      INVITE_SECRET: ${INVITE_SECRET:?generate one with `openssl rand -hex 32`}
     ports:
       - "3000:3000"
 

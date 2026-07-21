@@ -21,6 +21,11 @@ export const DEV_INVITE_SECRET = "dev-invite-secret-change-in-prod";
  * degrade behaviour but aren't security holes. No-op outside production so local
  * dev and the in-memory demo keep working with zero config.
  */
+/** True when DATABASE_URL points at a non-local host (mirrors db/client sslConfig). */
+function isRemoteDb(url: string): boolean {
+  return !/@(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)[:/]/.test(url);
+}
+
 export function validateProductionEnv(): void {
   if (process.env.NODE_ENV !== "production") return;
 
@@ -35,18 +40,68 @@ export function validateProductionEnv(): void {
     );
   }
 
-  // Soft warnings: these break behaviour (links/callbacks) but aren't exploitable.
+  // Hard fail when UNSET: without a public URL, invite/verification links, OAuth
+  // callbacks, and the widget embed are wrong — onboarding/integrations break on
+  // day one, so don't let a prod deploy boot half-broken. A localhost value is
+  // only a warning: it means someone consciously set it for a local production
+  // smoke (docker compose, the Playwright e2e server) rather than forgot it.
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (!appUrl || appUrl.includes("localhost")) {
+  if (!appUrl) {
+    errors.push(
+      "NEXT_PUBLIC_APP_URL is unset. Set it to your HTTPS domain — invite/verification email links, OAuth callbacks, and the widget embed snippet derive from it.",
+    );
+  } else if (appUrl.includes("localhost")) {
     warnings.push(
-      "NEXT_PUBLIC_APP_URL is unset or points at localhost. Invite/verification email links, OAuth callbacks, and the widget embed snippet will be wrong in production.",
+      "NEXT_PUBLIC_APP_URL points at localhost — fine for a local production smoke, wrong for a real deploy (email links, OAuth callbacks, and the widget embed will point at localhost).",
     );
   }
 
+  // Hard fail: selecting Stripe without its keys/prices silently falls back to a
+  // mock that grants paid entitlements for free and ack-and-discards real
+  // webhooks — a payment-integrity hazard. Fail fast instead.
+  if (process.env.BILLING_PROVIDER === "stripe") {
+    const missing = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_GROWTH", "STRIPE_PRICE_SCALE"].filter(
+      (k) => !process.env[k],
+    );
+    if (missing.length) {
+      errors.push(
+        `BILLING_PROVIDER=stripe but missing ${missing.join(", ")}. Without these the app would silently run mock billing (free entitlements, unverified webhooks). Set them or unset BILLING_PROVIDER.`,
+      );
+    }
+  }
+
+  // Hard fail: a remote DB encrypted but NOT CA-verified is MITM-able, and it
+  // carries every tenant's data + credentials. Require explicit CA verification
+  // (DB_CA_CERT or DB_SSL=verify) — or DB_SSL=disable to consciously opt out.
+  const dbUrl = process.env.DATABASE_URL;
+  if (dbUrl && isRemoteDb(dbUrl)) {
+    const mode = process.env.DB_SSL;
+    const hasCa = !!process.env.DB_CA_CERT?.trim();
+    if (mode !== "disable" && mode !== "verify" && !hasCa) {
+      errors.push(
+        "DATABASE_URL is a remote host but TLS is not CA-verified (MITM risk). Set DB_CA_CERT to the provider CA-bundle PEM (e.g. the RDS global bundle) or DB_SSL=verify (with NODE_EXTRA_CA_CERTS). Use DB_SSL=disable only to consciously opt out.",
+      );
+    }
+  }
+
+  // Hard fail: a configured Gmail/Slack channel without TOKEN_ENC_KEY stores
+  // third-party OAuth tokens as plaintext at rest.
   const usesChannels = process.env.GMAIL_CLIENT_ID || process.env.SLACK_CLIENT_ID || process.env.SLACK_SIGNING_SECRET;
   if (usesChannels && !process.env.TOKEN_ENC_KEY) {
-    warnings.push(
+    errors.push(
       "A Gmail/Slack channel is configured but TOKEN_ENC_KEY is unset — their refresh/bot tokens would be stored unencrypted at rest. Set a 32-byte key (`openssl rand -hex 32`).",
+    );
+  }
+
+  // Soft warnings: degraded operation, not a security hole.
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    warnings.push(
+      "UPSTASH_REDIS_REST_URL/TOKEN are unset — rate limiting is in-process only. On more than one instance each replica has its own (weaker) limits. Configure Upstash for shared limits across instances.",
+    );
+  }
+  if (!process.env.ERROR_WEBHOOK_URL && !process.env.SENTRY_DSN) {
+    warnings.push(
+      "No error sink configured (ERROR_WEBHOOK_URL / SENTRY_DSN). Production 500s will only appear in stdout logs — nothing will page you. Wire one before relying on alerting.",
     );
   }
 

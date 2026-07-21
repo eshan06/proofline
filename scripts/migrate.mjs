@@ -16,12 +16,17 @@ if (!url) {
   process.exit(1);
 }
 
-// Mirrors db/client.ts sslConfig: managed Postgres needs TLS but presents a
-// provider-CA cert, so encrypt without strict verification unless DB_SSL overrides.
+// Mirrors db/client.ts sslConfig exactly, INCLUDING DB_CA_CERT: a strict-TLS
+// runtime (DB_CA_CERT set) must use the same verified channel for migrations,
+// or db:migrate would fail / run over an unverified connection.
 function sslConfig(u) {
   if (process.env.DB_SSL === "disable") return false;
-  if (process.env.DB_SSL === "verify") return { rejectUnauthorized: true };
-  return /@(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)[:/]/.test(u) ? false : { rejectUnauthorized: false };
+  const ca = process.env.DB_CA_CERT?.replace(/\\n/g, "\n").trim() || undefined;
+  if (process.env.DB_SSL === "verify") return ca ? { rejectUnauthorized: true, ca } : { rejectUnauthorized: true };
+  const isLocal = /@(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)[:/]/.test(u);
+  if (isLocal) return false;
+  if (ca) return { rejectUnauthorized: true, ca };
+  return { rejectUnauthorized: false };
 }
 
 const sql = postgres(url, { max: 1, ssl: sslConfig(url) });

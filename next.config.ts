@@ -1,11 +1,24 @@
 import type { NextConfig } from "next";
 
 /**
- * Security headers applied to every response. The CSP is intentionally strict;
- * `'unsafe-inline'` on style-src is required because the design uses inline
- * style props pervasively (exact pixel values), and `'unsafe-eval'`/inline on
- * script-src is needed by the Next.js dev runtime — both are tightened in prod
- * below. Self-hosted Geist fonts mean no external font origins.
+ * Security headers applied to every response.
+ *
+ * CSP notes (accurate — do not overstate):
+ *  - style-src keeps 'unsafe-inline': the design uses inline style props
+ *    pervasively (exact pixel values). Low risk (style injection, not script).
+ *  - script-src keeps 'unsafe-inline' in BOTH dev and prod. Next.js App Router
+ *    emits inline hydration/bootstrap scripts (`self.__next_f` pushes) that need
+ *    either 'unsafe-inline' or a per-request nonce to execute. We additionally
+ *    drop 'unsafe-eval' in prod (only the dev runtime needs it).
+ *  - Remaining hardening (TODO): move script-src to a per-request nonce +
+ *    'strict-dynamic' to remove 'unsafe-inline'. That requires middleware to set
+ *    the nonce on the request CSP header AND handling statically-prerendered
+ *    pages (a per-request nonce can't be baked into static HTML), so it must be
+ *    browser-QA'd before shipping — it is NOT a drop-in change. There is no
+ *    currently-reachable inline-script sink (no dangerouslySetInnerHTML anywhere;
+ *    React auto-escapes), so this is a defense-in-depth gap, not a live hole.
+ *
+ * Self-hosted Geist fonts mean no external font origins.
  */
 const isProd = process.env.NODE_ENV === "production";
 
@@ -15,7 +28,7 @@ const csp = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'self'",
-  `script-src 'self' ${isProd ? "'unsafe-inline'" : "'unsafe-inline' 'unsafe-eval'"}`,
+  `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
