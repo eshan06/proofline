@@ -11,8 +11,8 @@ Postgres (with pgvector). Pick **one** of the two paths below.
 
 ## 0. Prerequisites (once)
 
-- **Postgres 15+ with pgvector** — AWS RDS, Supabase, Neon, or self-hosted. You already
-  have an RDS instance (`proofline`); a managed instance with automated backups is recommended.
+- **Postgres 15+ with pgvector** — AWS RDS, Supabase, Neon, or self-hosted. A managed
+  instance with automated backups is recommended.
 - A **domain** with HTTPS (the platform below terminates TLS for you).
 - API keys you want live (all optional — each falls back to a working keyless mode):
   OpenAI, Resend (+ a verified sender), Stripe (+ price ids), a Google OAuth client (Gmail).
@@ -62,7 +62,7 @@ trimmed to the server.)
 
 **Serverless caveat:** sessions are DB-backed (fine on serverless), but the rate limiter is
 in-process — on serverless it's per-instance and weak. For real rate limiting on Vercel,
-add the Redis-backed store (see Track-4 `RateStore`/`REDIS_URL`, e.g. Upstash).
+set `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (dep-free Upstash store).
 
 ## Path B — Docker (Fly.io / Render / ECS / Railway)
 
@@ -141,7 +141,7 @@ It purges expired sessions and demo workspaces past the demo TTL with no live se
 
 ## 8. Hardening before scale
 
-- Redis-backed rate limiting + (optional) sessions across instances (`REDIS_URL`).
-- `DB_SSL=verify` with your provider's CA bundle (`NODE_EXTRA_CA_CERTS`).
+- Redis-backed rate limiting across instances (`UPSTASH_REDIS_REST_URL`/`_TOKEN`).
+- `DB_CA_CERT` (provider CA bundle) or `DB_SSL=verify` for strict database TLS.
 - Sentry/OTel error + metrics; uptime monitoring on `/api/health`.
-- RDS automated backups + PITR (your instance already has 7-day retention) and a read replica.
+- Automated backups + PITR on your Postgres, and a read replica at scale.

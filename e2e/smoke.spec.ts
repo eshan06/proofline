@@ -63,5 +63,5 @@ test("playground refuses SSO questions (AI never guesses)", async ({ page }) => 
   await page.goto("/copilot");
   await page.getByPlaceholder("Type a fake customer question…").fill("Help me set up SAML SSO with Okta");
   await page.getByRole("button", { name: "Generate draft" }).click();
-  await expect(page.getByText(/refuses to guess/i)).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText(/no grounded source/i)).toBeVisible({ timeout: 5000 });
 });

@@ -1,105 +1,133 @@
 # Proofline
 
-**Support that shows its work.** An omnichannel AI customer-support copilot:
-website chat, email, and Slack unified into one inbox; an AI that drafts replies
-grounded in the customer's own knowledge base with **citations** and a
-**confidence score** on every draft; and a human who approves, edits, or
-escalates every send.
+[![CI](https://github.com/eshan06/proofline/actions/workflows/ci.yml/badge.svg)](https://github.com/eshan06/proofline/actions/workflows/ci.yml)
 
-This is a production-shaped Next.js implementation of the design in
-`design_handoff_proofline/`. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the
-stack decisions and [`PRODUCTION.md`](./PRODUCTION.md) for the readiness roadmap
-(what's done & tested, what needs your keys, what's left).
+**Support that shows its work.** An omnichannel AI customer-support copilot: website
+chat, email, and Slack unified into one inbox; an AI that drafts replies grounded in
+the customer's own knowledge base with **citations and a confidence score on every
+draft**; and a human who approves, edits, or escalates every send. The refusal path
+is first-class: **no grounded source ⇒ no draft** — the AI never silently guesses.
 
-**Two run modes, one codebase:**
-- **Zero-setup** (no `DATABASE_URL`): runs entirely in-memory with a deterministic
-  fixture provider — the demo and tests work with `npm run dev` and nothing else.
-- **Real backend** (`DATABASE_URL` set): Postgres persistence + multi-tenancy,
-  email/password auth, and a real RAG pipeline on pgvector (chunk → embed →
-  retrieve → score → cite → refuse). LLM/embeddings/email/billing are behind
-  interfaces selected by env (mock transports until you add keys).
+![Proofline inbox — AI draft with citations and confidence](docs/screenshots/inbox.png)
 
-## Stack
-
-Next.js 15 (App Router, RSC) · TypeScript (strict) · Tailwind CSS v4 ·
-TanStack Query · zustand · zod · Framer Motion · Geist + Geist Mono · Vitest.
-
-## Getting started
+## Run it locally (zero setup)
 
 ```bash
 npm install
-npm run dev          # http://localhost:3000
+npm run dev          # → http://localhost:3000
 ```
 
-> **Note for OneDrive / network drives without symlink support:** if
-> `npm install` fails with `EPERM: operation not permitted, symlink`, install
-> with `npm install --no-bin-links` and run the toolchain via `node` directly
-> (e.g. `node node_modules/next/dist/bin/next dev`,
-> `node node_modules/typescript/lib/tsc.js --noEmit`,
-> `node node_modules/vitest/vitest.mjs run`).
+No database, no API keys, nothing to configure: without `DATABASE_URL` the app runs
+on an in-memory repository with a deterministic mock AI provider. Open
+[`/demo`](http://localhost:3000/demo) for a seeded sandbox workspace with a guided
+"try it yourself" checklist — accept an AI draft, upload a KB doc, watch the SSO
+ticket refuse honestly.
 
-### Entry points
+**With Postgres** (real persistence, auth, and the actual RAG pipeline):
 
-- `/` — marketing landing page (interactive proof card, auto-playing DemoStage,
-  integration marquee, play-once feature demos, pricing).
-- `/demo` — creates an unauthenticated **sandbox session** (server-seeded mock
-  workspace, no persistence, rate-limited AI) and drops you into the hero inbox
-  with the guided "Try it yourself" checklist.
-- `/signin` — the regular sign-in flow (separate from demo); lands on `/home`.
-- The app: `/home`, `/inbox/[ticketId]`, `/tickets`, `/customers/[id]`, `/kb`,
-  `/copilot`, `/automations`, `/analytics`, `/integrations`, `/settings/[tab]`.
+```bash
+docker run -d --name pl-postgres -e POSTGRES_PASSWORD=proofline \
+  -e POSTGRES_DB=proofline -p 5432:5432 pgvector/pgvector:pg16
+echo "DATABASE_URL=postgres://postgres:proofline@localhost:5432/proofline" > .env.local
+npm run db:migrate
+npm run dev          # sign up at /signin — real accounts, real embeddings
+```
+
+Or the production-like stack in one command:
+`INVITE_SECRET=$(openssl rand -hex 32) docker compose up --build`.
+
+## What's real vs. what's mocked
+
+Every subsystem sits behind an interface with a real implementation **and** a
+working keyless fallback, selected by env — the UI can't tell which is active, and
+nothing crashes without a key.
+
+| Subsystem | Keyless default | Real implementation (env flip) |
+|---|---|---|
+| Persistence | In-memory, per-session | Postgres + Drizzle, workspace-scoped multi-tenancy |
+| Retrieval | Fixture-grounded | pgvector RAG: chunk → embed → cosine-kNN → score → cite → **refuse** |
+| Embeddings | Local hashed vectors (free) | OpenAI `text-embedding-3-small` |
+| LLM drafting | Grounded template drafter | OpenAI (graceful fallback) |
+| Email | Console logger | Resend |
+| Billing | Mock | Stripe — signature-verified webhooks, plans, seat gating |
+| Channels | Website chat widget (fully real, end-to-end) | + Gmail OAuth sync, Slack Events API |
+
+The website chat channel is real with zero keys: a public embed script
+(`/api/widget/embed`, live preview at `/widget-preview`) opens tickets in the inbox,
+and approved agent replies stream back to the visitor.
+
+## Engineering highlights
+
+- **RAG with honest refusals** — ingestion (text/MD/CSV/HTML/PDF/DOCX) → chunking →
+  embeddings → cosine-kNN retrieval → confidence scoring → citation extraction, with
+  an explicit ungrounded-refusal path threaded through the product (inbox error
+  state, KB warning, playground refusal are all the same field).
+- **Concurrency-safe invariants** — plan seat limits and the "last active Admin"
+  rule are enforced atomically (`FOR UPDATE` row locks, transactional upserts), not
+  read-then-write; invite tokens are single-use and re-checked at accept time.
+- **Stripe webhooks done right** — constant-time signature verification that
+  accepts dual signatures during secret rotation, an idempotency ledger with a
+  compensating un-mark so a transient failure is actually retried, and an ordering
+  watermark so a stale `past_due` can't clobber a newer `active`.
+- **Abuse-resistant by default** — streamed request-body caps that ignore lying
+  `Content-Length` headers, proxy-spoofing-resistant client IPs, per-IP +
+  per-account + per-workspace token buckets, magic-byte sniffing on uploads,
+  per-document chunk ceilings, and per-conversation message caps on the public
+  widget intake.
+- **Enumeration-safe auth** — signup/login/forgot are response-identical for
+  existing vs. unknown emails, with timing-constant login and per-account throttles
+  that survive IP rotation.
+- **RBAC with a CI-enforced manifest** — every mutating route carries a
+  `requireRole` gate, and a static route-policy test fails CI if a gate is dropped.
+- **Fail-fast production config** — the server refuses to boot in production with a
+  forgeable invite secret, missing app URL, half-configured Stripe, un-verified
+  remote DB TLS, or plaintext channel tokens (AES-256-GCM at rest otherwise).
+- **Tenant privacy** — complete GDPR export (including channel-captured end-customer
+  PII), account deletion that also cancels + deletes the Stripe customer, and
+  masked email addresses in logs.
 
 ## Quality gates
 
 ```bash
-npm run typecheck    # tsc --noEmit (strict, noUncheckedIndexedAccess)
-npm run lint         # eslint (next/core-web-vitals + typescript)
-npm test             # vitest — 39 unit tests
-npm run test:e2e     # playwright — critical-path smoke (builds + starts the app)
+npm run typecheck    # tsc --noEmit (strict + noUncheckedIndexedAccess)
+npm run lint         # eslint
+npm test             # 184 Vitest tests (+5 real-Postgres concurrency tests, skipped without a DB)
+npm run test:e2e     # 7 Playwright smoke scenarios (builds + boots the production server)
 npm run build        # next build
 ```
 
-Unit tests cover where they earn their keep: the confidence color scale (incl.
-exact 0.80/0.65 boundaries), the inbox data layer (filters/counts/search), the
-automations engine (triggers/conditions/actions + the low-confidence safety
-net), the mock AI provider's keyword routing + KB-grounded SSO refusal, and the
-command-palette keyboard handling. The Playwright smoke suite (`e2e/`) drives the
-real browser through the demo boot, the accept-draft loop, the SSO refusal/error
-state, the ⌘K palette, and the playground refusal — proving styles load and the
-happy path works end-to-end. CI (`.github/workflows/ci.yml`) runs both on every
-push/PR.
+CI (GitHub Actions) runs all of the above on every push and PR.
 
-## Production posture
+## Entry points
 
-- **Security headers** on every response (strict CSP, `X-Frame-Options: DENY`,
-  `nosniff`, `Referrer-Policy`, `Permissions-Policy`, HSTS in prod);
-  `x-powered-by` removed. Session cookies are `httpOnly` + `secure` in prod.
-- **Error boundaries** (root + app-section) and a styled 404 — never a white
-  stack trace; an app-shell loading skeleton avoids layout shift.
-- **`/api/health`** liveness probe (unauthenticated, dependency-free) reports
-  the active AI provider.
-- **Structured JSON logging** (`src/server/logger.ts`) is the seam for a log
-  pipeline; analytics events flow through it.
-- **Config** via env (`.env.example`): `AI_PROVIDER`, the real-provider keys,
-  `DEMO_AI_CALL_LIMIT`.
+- `/` — marketing landing (interactive proof card, auto-playing demo stage, pricing).
+- `/demo` — unauthenticated sandbox session: seeded workspace, rate-limited AI,
+  guided checklist. Nothing persists past the session.
+- `/signin` — real accounts (email/password, verification, reset); lands on `/home`.
+- The app: `/home`, `/inbox/[ticketId]`, `/tickets`, `/customers/[id]`, `/kb`,
+  `/copilot` (settings + playground), `/automations`, `/analytics`, `/integrations`,
+  `/settings/[tab]`, `/widget-preview`.
 
-## How the AI works (and swaps for a real provider)
+![Proofline landing page](docs/screenshots/landing.png)
 
-Everything the UI calls goes through one `DraftProvider` interface
-(`src/server/ai/provider.ts`): `regenerate`, `rewrite`, `answer`. The bundled
-`MockDraftProvider` answers from fixture data with the design's keyword routing
-and latencies; a production provider implements the same interface as a full
-RAG pass (ingestion → chunking → embedding → retrieval → drafting → citation
-extraction → confidence scoring). The refusal path is first-class: **no grounded
-source ⇒ no draft** — the AI never silently guesses. This is the cross-page
-thread tying inbox `TKT-1024`, the failed SSO doc in the Knowledge Base, and the
-playground's refusal.
+## Stack
+
+Next.js 15 (App Router, RSC) · TypeScript strict · Tailwind CSS v4 · Drizzle ORM ·
+Postgres + pgvector · TanStack Query · zustand · zod · Framer Motion · Vitest ·
+Playwright.
+
+## More docs
+
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — the stack decisions and system shape,
+  written as a design review before the code.
+- [`PRODUCTION.md`](./PRODUCTION.md) — the readiness ledger: what's done and
+  tested, what needs your keys, what's deliberately left.
+- [`DEPLOY.md`](./DEPLOY.md) — the runbook (Vercel or Docker), migrations, provider
+  checklist, post-deploy smoke test.
 
 ## Notes
 
-- Dark theme only; desktop-first (≥1240px). Panes scroll internally; the shell
-  never scrolls.
-- The session store is in-memory and per-session (interface-isolated so
-  Postgres/Drizzle can replace it without touching route handlers). Single
-  process; sessions evaporate on restart — a deliberate v1 trade-off documented
-  in `ARCHITECTURE.md`.
+- Dark theme only; desktop-first (≥1240px) by design. The marketing site is
+  responsive; the app targets an agent's desktop.
+- On filesystems without symlink support (some network drives), install with
+  `npm install --no-bin-links` and invoke tools via `node node_modules/<pkg>/<entry>`.

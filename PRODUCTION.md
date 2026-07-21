@@ -66,7 +66,7 @@ Legend: ✅ done & tested · 🔌 built, needs your credentials to go live · �
 - Structured JSON logging, `/api/health` (liveness) + `/api/health/ready`
   (readiness — pings Postgres in DB mode), GitHub Actions CI (typecheck/lint/test/build + e2e).
 - Dockerfile (standalone, non-root, healthcheck) + docker-compose (app + pgvector).
-- 101 unit tests + 3 Postgres integration tests (concurrency; skipped without a DB) + 7 E2E.
+- 184 unit tests + 5 Postgres integration tests (concurrency; skipped without a DB) + 7 E2E.
 
 ### Identity & data integrity ✅
 - The **real signed-in user** drives the app shell (sidebar, topbar, home greeting)

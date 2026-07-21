@@ -9,6 +9,12 @@ the way a design review would expect them. The pixel source of truth is
 `design_handoff_proofline/` (README + three `.dc.html` prototypes); nothing here
 overrides it.
 
+> **Historical note:** this is the v1 design document, kept as written. Some
+> deliberate v1 trade-offs it records have since been superseded — the in-memory
+> store now has a full Postgres/Drizzle sibling, a real RAG pipeline runs on
+> pgvector, and a Playwright E2E suite exists. See the README and
+> `PRODUCTION.md` for the current state.
+
 ---
 
 ## 1. Stack
