@@ -62,12 +62,12 @@ export async function attachSession(ws: Workspace, session: SessionInfo): Promis
 export async function loadWorkspace(): Promise<Workspace> {
   const session = await currentSession();
   if (!session) {
-    if (hasDatabase()) redirect("/signin");
-    // No DB: this path is effectively unreachable (middleware mints a cookie),
-    // but seed an ephemeral demo workspace rather than failing.
-    const demo = await startDemoSession();
-    const ws = await repo().getWorkspace(demo.workspaceId);
-    return attachSession(ws, demo);
+    // With a DB, app routes require a real session. Without one, a missing OR
+    // stale cookie (the in-memory store restarted — routine on serverless)
+    // re-enters through /demo, a route handler that MAY set the session
+    // cookie. Minting the session here instead would throw: an RSC render
+    // cannot modify cookies, which used to surface as a 500 on stale cookies.
+    redirect(hasDatabase() ? "/signin" : "/demo");
   }
   const ws = await repo().getWorkspace(session.workspaceId);
   return attachSession(ws, session);
@@ -82,10 +82,9 @@ export async function loadWorkspace(): Promise<Workspace> {
 export async function loadShell(): Promise<Shell> {
   const session = await currentSession();
   if (!session) {
-    if (hasDatabase()) redirect("/signin");
-    const demo = await startDemoSession();
-    const shell = await repo().getShell(demo.workspaceId);
-    return { name: shell.name, currentUser: null, notifications: shell.notifications, demo: { active: true, steps: demo.demoSteps } };
+    // Same as loadWorkspace: stale/missing cookie re-enters via /demo (a route
+    // handler may set cookies; this RSC render may not).
+    redirect(hasDatabase() ? "/signin" : "/demo");
   }
   const [shell, currentUser] = await Promise.all([repo().getShell(session.workspaceId), resolveCurrentUser(session)]);
   return {

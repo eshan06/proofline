@@ -52,6 +52,16 @@ trimmed to the server.)
 
 ---
 
+## Path 0 — stateless demo (no database, zero config)
+
+Deploy the repo to Vercel (or any Node host) with **no env vars at all**: without
+`DATABASE_URL` the app boots as the in-memory demo — every visitor gets a seeded
+sandbox workspace, the AI is the deterministic mock, and nothing persists. The
+production env validator logs its hard-fails as warnings in this mode (there is
+nothing durable to protect). Sessions reset on cold starts/redeploys; visitors
+are transparently re-entered through `/demo`. This is the mode to link from a
+portfolio; Paths A/B below are for running it as a real product.
+
 ## Path A — Vercel (fastest)
 
 1. Import the repo in Vercel. Framework preset: **Next.js** (auto-detected).

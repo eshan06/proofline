@@ -36,6 +36,18 @@ npm run dev          # sign up at /signin — real accounts, real embeddings
 Or the production-like stack in one command:
 `INVITE_SECRET=$(openssl rand -hex 32) docker compose up --build`.
 
+## Deploy the demo (one click, no database)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Feshan06%2Fproofline&project-name=proofline-demo&repository-name=proofline-demo)
+
+With no `DATABASE_URL`, a production deploy runs as the **stateless in-memory
+demo**: every visitor gets a seeded sandbox workspace with the mock AI —
+zero env vars, zero services, nothing durable to secure (the startup validator
+relaxes its hard-fails to warnings in exactly this case). Sessions live in
+process memory and reset on cold starts; the app recovers by re-entering
+`/demo` automatically. Add the env vars from [`DEPLOY.md`](./DEPLOY.md) to turn
+the same deployment into the real, database-backed product.
+
 ## What's real vs. what's mocked
 
 Every subsystem sits behind an interface with a real implementation **and** a
@@ -91,7 +103,7 @@ and approved agent replies stream back to the visitor.
 ```bash
 npm run typecheck    # tsc --noEmit (strict + noUncheckedIndexedAccess)
 npm run lint         # eslint
-npm test             # 184 Vitest tests (+5 real-Postgres concurrency tests, skipped without a DB)
+npm test             # 186 Vitest tests (+5 real-Postgres concurrency tests, skipped without a DB)
 npm run test:e2e     # 7 Playwright smoke scenarios (builds + boots the production server)
 npm run build        # next build
 ```

@@ -25,12 +25,17 @@ function setEnv(env: Record<string, string | undefined>) {
   }
 }
 
-/** A minimal valid production config; individual tests break one thing at a time. */
+/**
+ * A minimal valid production config; individual tests break one thing at a time.
+ * Includes a (local) DATABASE_URL because a database-less production boot is the
+ * stateless in-memory demo, where the hard-fails intentionally relax to warnings.
+ */
 function baseProd(): Record<string, string | undefined> {
   return {
     NODE_ENV: "production",
     INVITE_SECRET: "a".repeat(64),
     NEXT_PUBLIC_APP_URL: "https://app.example.com",
+    DATABASE_URL: "postgres://postgres:x@localhost:5432/proofline",
     // Silence the soft warnings so they don't clutter test output.
     UPSTASH_REDIS_REST_URL: "https://x.upstash.io",
     UPSTASH_REDIS_REST_TOKEN: "t",
@@ -113,5 +118,17 @@ describe("validateProductionEnv", () => {
   it("passes in production with a real INVITE_SECRET and minimal valid config", () => {
     setEnv(baseProd());
     expect(() => validateProductionEnv()).not.toThrow();
+  });
+
+  it("stateless demo (no DATABASE_URL): boots with zero config, only warns", () => {
+    // One-click demo deploys have no database and no env at all — nothing
+    // durable exists to protect, so the hard-fails must relax to warnings.
+    setEnv({ NODE_ENV: "production" });
+    expect(() => validateProductionEnv()).not.toThrow();
+  });
+
+  it("stateless demo relaxation does NOT apply once a database is configured", () => {
+    setEnv({ NODE_ENV: "production", DATABASE_URL: "postgres://postgres:x@localhost:5432/proofline" });
+    expect(() => validateProductionEnv()).toThrow(/INVITE_SECRET/);
   });
 });

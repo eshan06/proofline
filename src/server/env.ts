@@ -32,6 +32,14 @@ export function validateProductionEnv(): void {
   const errors: string[] = [];
   const warnings: string[] = [];
 
+  // A production boot with no DATABASE_URL is the stateless in-memory demo
+  // (e.g. a one-click Vercel deploy): accounts, invites, and sessions all
+  // evaporate on restart, so there is nothing durable for a forged invite or a
+  // missing key to compromise. In that mode the hard-fails below become loud
+  // warnings, so the demo deploys with zero configuration — while any deploy
+  // with a real database keeps the strict checks.
+  const statelessDemo = !process.env.DATABASE_URL;
+
   // Hard fail: a forgeable invite-token signing key is a workspace-takeover hole.
   const invite = process.env.INVITE_SECRET;
   if (!invite || invite === DEV_INVITE_SECRET) {
@@ -108,6 +116,14 @@ export function validateProductionEnv(): void {
   for (const w of warnings) logger.warn("env.config_warning", { message: w });
 
   if (errors.length) {
+    if (statelessDemo) {
+      for (const e of errors) logger.warn("env.demo_mode_relaxed", { message: e });
+      logger.warn("env.demo_mode", {
+        message:
+          "No DATABASE_URL: running as the stateless in-memory demo. The warnings above would block a real (database-backed) production deploy.",
+      });
+      return;
+    }
     const message = `Refusing to start: insecure production configuration.\n${errors
       .map((e) => `  • ${e}`)
       .join("\n")}`;
