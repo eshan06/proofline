@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/eshan06/proofline/actions/workflows/ci.yml/badge.svg)](https://github.com/eshan06/proofline/actions/workflows/ci.yml)
 
+**[▶ Live demo](https://proofline-rho.vercel.app/demo)** — no signup, nothing to install.
+
 **Support that shows its work.** An omnichannel AI customer-support copilot: website
 chat, email, and Slack unified into one inbox; an AI that drafts replies grounded in
 the customer's own knowledge base with **citations and a confidence score on every
@@ -39,6 +41,9 @@ Or the production-like stack in one command:
 ## Deploy the demo (one click, no database)
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Feshan06%2Fproofline&project-name=proofline-demo&repository-name=proofline-demo)
+
+The [live demo](https://proofline-rho.vercel.app/demo) above is this repo deployed
+exactly this way, with no environment variables at all.
 
 With no `DATABASE_URL`, a production deploy runs as the **stateless in-memory
 demo**: every visitor gets a seeded sandbox workspace with the mock AI —
