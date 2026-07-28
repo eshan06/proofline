@@ -53,6 +53,27 @@ process memory and reset on cold starts; the app recovers by re-entering
 `/demo` automatically. Add the env vars from [`DEPLOY.md`](./DEPLOY.md) to turn
 the same deployment into the real, database-backed product.
 
+### Embed it in another page
+
+The demo build is framable (`frame-ancestors *`, no `X-Frame-Options`), so it
+drops into a portfolio or docs page as-is. The app is desktop-first, so give it
+room:
+
+```html
+<iframe src="https://proofline-rho.vercel.app/demo"
+        width="1280" height="760" style="border:0;border-radius:8px"
+        title="Proofline demo"></iframe>
+```
+
+Its session cookie is `SameSite=None; Secure; Partitioned`, so the sandbox
+survives inside a third-party frame and is partitioned per embedding page
+(CHIPS) — each host page gets its own isolated demo. In browsers that block
+third-party cookies outright (Safari by default), the frame still renders but
+the sandbox resets on each navigation inside it, so keep a plain link to the
+demo alongside the embed. A **database-backed** deployment is deliberately not
+embeddable: it keeps `X-Frame-Options: DENY` and `SameSite=Lax`, because there
+the session is a real credential for real tenant data.
+
 ## What's real vs. what's mocked
 
 Every subsystem sits behind an interface with a real implementation **and** a
@@ -108,7 +129,7 @@ and approved agent replies stream back to the visitor.
 ```bash
 npm run typecheck    # tsc --noEmit (strict + noUncheckedIndexedAccess)
 npm run lint         # eslint
-npm test             # 186 Vitest tests (+5 real-Postgres concurrency tests, skipped without a DB)
+npm test             # 189 Vitest tests (+5 real-Postgres concurrency tests, skipped without a DB)
 npm run test:e2e     # 7 Playwright smoke scenarios (builds + boots the production server)
 npm run build        # next build
 ```

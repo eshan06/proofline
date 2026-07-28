@@ -1,15 +1,10 @@
 import { cookies } from "next/headers";
 import { repo, type SessionInfo } from "@/server/repository";
+import { SESSION_COOKIE, SESSION_MAX_AGE, sessionCookieOptions } from "@/lib/session-cookie";
 
-export const SESSION_COOKIE = "pl_session";
+export { SESSION_COOKIE };
 
-const cookieOpts = (type: "regular" | "demo") => ({
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax" as const,
-  path: "/",
-  maxAge: type === "demo" ? 60 * 30 : 60 * 60 * 12,
-});
+const cookieOpts = (type: "regular" | "demo") => sessionCookieOptions(SESSION_MAX_AGE[type]);
 
 /** Read the current session (RSC / route handlers). Null when signed out. */
 export async function currentSession(): Promise<SessionInfo | null> {

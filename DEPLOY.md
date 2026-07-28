@@ -62,6 +62,13 @@ nothing durable to protect). Sessions reset on cold starts/redeploys; visitors
 are transparently re-entered through `/demo`. This is the mode to link from a
 portfolio; Paths A/B below are for running it as a real product.
 
+This build is also **embeddable** — it serves `frame-ancestors *` with no
+`X-Frame-Options`, and its session cookie is `SameSite=None; Secure;
+Partitioned` so a sandbox survives inside a cross-site iframe (partitioned per
+embedding page). See the README for the snippet. Both relaxations are keyed
+strictly to the absence of `DATABASE_URL`: a real deployment still denies
+framing and keeps `SameSite=Lax`.
+
 ## Path A — Vercel (fastest)
 
 1. Import the repo in Vercel. Framework preset: **Next.js** (auto-detected).

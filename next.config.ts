@@ -22,11 +22,26 @@ import type { NextConfig } from "next";
  */
 const isProd = process.env.NODE_ENV === "production";
 
+/**
+ * Framing policy. A deployment WITH a database serves real tenant data, so it
+ * refuses to be framed at all (clickjacking defense). The stateless demo build
+ * (no DATABASE_URL) is the opposite case: it exists to be shown off, embedded
+ * in a portfolio or docs page, and holds nothing but a throwaway sandbox — no
+ * accounts, no persistence, nothing a clickjack could steal or destroy. So the
+ * demo allows framing and the real thing does not.
+ *
+ * Note this is resolved at BUILD time (next.config is not per-request), which
+ * matches how DATABASE_URL is supplied on every supported host — adding a
+ * database means redeploying anyway (migrations have to run).
+ */
+const embeddableDemo = !process.env.DATABASE_URL;
+
 const csp = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
-  "frame-ancestors 'none'",
+  // `*` = embeddable anywhere (demo only); otherwise no framing at all.
+  embeddableDemo ? "frame-ancestors *" : "frame-ancestors 'none'",
   "form-action 'self'",
   `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
   "style-src 'self' 'unsafe-inline'",
@@ -38,7 +53,10 @@ const csp = [
 
 const securityHeaders = [
   { key: "Content-Security-Policy", value: csp },
-  { key: "X-Frame-Options", value: "DENY" },
+  // X-Frame-Options has no "allow any origin" value (ALLOW-FROM is dead), so
+  // the only way to permit embedding is to omit the header and let the CSP
+  // frame-ancestors directive above govern — every current browser honours it.
+  ...(embeddableDemo ? [] : [{ key: "X-Frame-Options", value: "DENY" }]),
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },

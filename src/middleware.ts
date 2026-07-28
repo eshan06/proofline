@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { SESSION_COOKIE, SESSION_MAX_AGE, sessionCookieOptions } from "@/lib/session-cookie";
 
-export const SESSION_COOKIE = "pl_session";
+export { SESSION_COOKIE };
 
 /**
  * Gate app routes on a session cookie. Cookies can't be written from a Server
@@ -62,13 +63,7 @@ export function middleware(req: NextRequest) {
   const id = `ws_s_${crypto.randomUUID().replace(/-/g, "")}`;
   const res = NextResponse.next();
   req.cookies.set(SESSION_COOKIE, id);
-  res.cookies.set(SESSION_COOKIE, id, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 12,
-  });
+  res.cookies.set(SESSION_COOKIE, id, sessionCookieOptions(SESSION_MAX_AGE.regular));
   return res;
 }
 
